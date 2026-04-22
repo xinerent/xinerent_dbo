@@ -2,6 +2,7 @@ from flask import Flask, request, redirect
 import sqlite3
 import time
 import os
+import datetime
 
 app = Flask(__name__)
 
@@ -33,6 +34,11 @@ CREATE TABLE IF NOT EXISTS films (
 conn.commit()
 
 # -------------------------
+# SET REAL PREMIERE TIME
+# -------------------------
+release_time = int(datetime.datetime(2026, 4, 24, 19, 0).timestamp())
+
+# -------------------------
 # DEFAULT FILM
 # -------------------------
 cursor.execute("SELECT COUNT(*) FROM films")
@@ -43,7 +49,7 @@ if cursor.fetchone()[0] == 0:
     """, (
         "XineRent Premiere Film",
         "https://www.youtube.com/embed/-AUw43bmMWQ",
-        int(time.time()) + 60
+        release_time
     ))
     conn.commit()
 
@@ -68,9 +74,7 @@ body {
     font-size: 20px;
 }
 
-.container {
-    padding: 25px 15px;
-}
+.container { padding: 25px 15px; }
 
 .card {
     background: rgba(255,255,255,0.07);
@@ -78,12 +82,10 @@ body {
     padding: 25px;
     margin: 20px auto;
     max-width: 95%;
-    box-shadow: 0 0 30px rgba(0,0,0,0.8);
 }
 
 h1 { font-size: 34px; }
 h2 { font-size: 28px; }
-h3 { font-size: 24px; }
 
 a, button {
     display: block;
@@ -91,7 +93,6 @@ a, button {
     padding: 18px;
     background: #1db954;
     color: black;
-    text-decoration: none;
     border-radius: 12px;
     font-weight: bold;
     font-size: 20px;
@@ -112,9 +113,7 @@ input {
     border-radius: 14px;
 }
 
-.glow {
-    text-shadow: 0 0 10px #1db954;
-}
+.glow { text-shadow: 0 0 10px #1db954; }
 </style>
 """
 
@@ -125,20 +124,15 @@ input {
 def home():
     return f"""
     <html><head>{BASE_STYLE}</head><body>
-
     <div class="container">
-
     <h1 class="glow">🎬 XineRent</h1>
-    <p>Digital Box Office</p>
 
     <div class="card">
         <a href="/films">🎟 Get Ticket</a>
         <a href="/enter">🎬 Enter Premiere</a>
     </div>
 
-    </div>
-
-    </body></html>
+    </div></body></html>
     """
 
 # -------------------------
@@ -162,7 +156,7 @@ def films():
 
         html += f"""
         <div class="card">
-            <h3>{f[1]}</h3>
+            <h2>{f[1]}</h2>
             <p>{count}/{MAX_TICKETS} tickets</p>
             {button}
         </div>
@@ -178,9 +172,7 @@ def films():
 def claim(film_id):
     return f"""
     <html><head>{BASE_STYLE}</head><body>
-
     <div class="container">
-
     <h2 class="glow">🎟 Claim Ticket</h2>
 
     <div class="card">
@@ -191,9 +183,7 @@ def claim(film_id):
         </form>
     </div>
 
-    </div>
-
-    </body></html>
+    </div></body></html>
     """
 
 # -------------------------
@@ -226,7 +216,6 @@ def submit(film_id):
 
     return f"""
     <html><head>{BASE_STYLE}</head><body>
-
     <div class="container">
 
     <h2 class="glow">🎟 ACCESS GRANTED</h2>
@@ -236,13 +225,11 @@ def submit(film_id):
         <a href="/watch/{ticket_id}">▶ Enter Premiere</a>
     </div>
 
-    </div>
-
-    </body></html>
+    </div></body></html>
     """
 
 # -------------------------
-# ENTER (LOGIN)
+# ENTER
 # -------------------------
 @app.route("/enter", methods=["GET", "POST"])
 def enter():
@@ -259,7 +246,6 @@ def enter():
 
     return f"""
     <html><head>{BASE_STYLE}</head><body>
-
     <div class="container">
 
     <h2 class="glow">🎬 Enter Premiere</h2>
@@ -271,13 +257,11 @@ def enter():
         </form>
     </div>
 
-    </div>
-
-    </body></html>
+    </div></body></html>
     """
 
 # -------------------------
-# WATCH
+# WATCH (REAL COUNTDOWN)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -294,11 +278,27 @@ def watch(ticket_id):
     now = int(time.time())
 
     if now < film[3]:
-        return f"<h2>⏳ Premiere starts soon</h2>"
+        remaining = film[3] - now
+        hours = remaining // 3600
+        minutes = (remaining % 3600) // 60
+
+        return f"""
+        <html><head>{BASE_STYLE}</head><body>
+        <div class="container">
+
+        <h2 class="glow">⏳ PREMIERE LOCKED</h2>
+
+        <div class="card">
+            <p>Welcome {ticket[1]}</p>
+            <p>Starts in:</p>
+            <h1>{hours}h {minutes}m</h1>
+        </div>
+
+        </div></body></html>
+        """
 
     return f"""
     <html><head>{BASE_STYLE}</head><body>
-
     <div class="container">
 
     <h2 class="glow">🎬 LIVE PREMIERE</h2>
@@ -307,9 +307,7 @@ def watch(ticket_id):
         <iframe src="{film[2]}" allowfullscreen></iframe>
     </div>
 
-    </div>
-
-    </body></html>
+    </div></body></html>
     """
 
 # -------------------------
