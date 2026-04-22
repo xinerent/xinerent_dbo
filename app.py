@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect
+from flask import Flask, request, redirect, session
 import sqlite3
 import time
 import os
@@ -7,6 +7,7 @@ import smtplib
 from email.mime.text import MIMEText
 
 app = Flask(__name__)
+app.secret_key = "xinerent_secure"
 
 # -------------------------
 # DATABASE
@@ -33,11 +34,21 @@ CREATE TABLE IF NOT EXISTS films (
 )
 """)
 
+# FIXED VIEWERS (no duplicates)
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS viewers (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    ticket_id INTEGER,
+    ticket_id INTEGER PRIMARY KEY,
     last_seen INTEGER
+)
+""")
+
+# LOGIN TRACKING
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS logins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    email TEXT,
+    time INTEGER
 )
 """)
 
@@ -95,7 +106,7 @@ def send_email(to_email, subject, message):
         print("Email error:", e)
 
 # -------------------------
-# UI (BIGGER + WHITE + GOLD)
+# 🎬 ULTRA CINEMATIC UI (BIG)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -107,69 +118,64 @@ body {
     background: radial-gradient(circle at top, #050505, #000);
     color: #ffffff;
     text-align: center;
-    font-size: 34px;
+    font-size: 38px;
 }
 
-.container { padding: 70px 20px; }
+.container { padding: 80px 20px; }
 
 .card {
     background: #0f0f0f;
-    border-radius: 28px;
-    padding: 50px;
-    margin: 35px auto;
+    border-radius: 30px;
+    padding: 60px;
+    margin: 40px auto;
     max-width: 98%;
     border: 1px solid rgba(212,175,55,0.3);
 }
 
-h1 { font-size: 90px; }
-h2 { font-size: 65px; }
-p  { font-size: 34px; }
+h1 { font-size: 100px; }
+h2 { font-size: 70px; }
+p  { font-size: 36px; }
 
 .glow {
     color: #d4af37;
     text-shadow: 0 0 25px #d4af37;
 }
 
-/* BIG TIMER FIX */
 .timer {
-    font-size: 110px;
-    color: white;
+    font-size: 120px;
     font-weight: bold;
-    text-shadow: 0 0 25px #fff;
+    color: white;
+    text-shadow: 0 0 30px white;
 }
 
-/* BUTTONS */
 a, button {
     display: block;
     margin-top: 30px;
     padding: 35px;
+    font-size: 40px;
     background: linear-gradient(135deg, #d4af37, #f5e6c8);
     color: black;
-    border-radius: 22px;
-    font-size: 38px;
     font-weight: bold;
+    border-radius: 20px;
     text-decoration: none;
 }
 
-/* INPUT */
 input {
-    width: 95%;
+    width: 98%;
     padding: 30px;
-    font-size: 34px;
+    font-size: 36px;
     background: #111;
     color: white;
     border: 1px solid #333;
     border-radius: 15px;
 }
 
-/* VIDEO */
 .video-box iframe {
     width: 100%;
     aspect-ratio: 16/9;
     border-radius: 20px;
 }
 
-/* LIVE DOT */
 .live {
     color: #00ff88;
     font-weight: bold;
@@ -243,12 +249,17 @@ def claim(film_id):
     """
 
 # -------------------------
-# SUBMIT
+# SUBMIT (WITH LOGIN TRACK)
 # -------------------------
 @app.route("/submit/<int:film_id>", methods=["POST"])
 def submit(film_id):
     name = request.form.get("name")
     email = request.form.get("email")
+
+    # TRACK LOGIN
+    cursor.execute("INSERT INTO logins (name,email,time) VALUES (?,?,?)",
+                   (name, email, int(time.time())))
+    conn.commit()
 
     cursor.execute("SELECT id FROM tickets WHERE email=? AND film_id=?", (email, film_id))
     existing = cursor.fetchone()
@@ -302,13 +313,14 @@ def enter():
     """
 
 # -------------------------
-# WATCH (FIXED TIMER + LIVE VIEWERS + EMAIL SAFE)
+# WATCH (LIVE VIEWERS FIXED)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
 
     cursor.execute("SELECT * FROM tickets WHERE id=?", (ticket_id,))
     ticket = cursor.fetchone()
+
     if not ticket:
         return "<h2>❌ Invalid Ticket</h2>"
 
@@ -317,14 +329,14 @@ def watch(ticket_id):
 
     now = int(time.time())
 
-    # LIVE VIEWERS UPDATE
-    cursor.execute("""
-    INSERT OR REPLACE INTO viewers (ticket_id, last_seen)
-    VALUES (?, ?)
-    """, (ticket_id, now))
+    # LIVE VIEWERS (NO DUPLICATE)
+    cursor.execute("INSERT OR REPLACE INTO viewers (ticket_id,last_seen) VALUES (?,?)", (ticket_id, now))
     conn.commit()
 
-    # PRE PREMIERE
+    # REMOVE INACTIVE
+    cursor.execute("DELETE FROM viewers WHERE last_seen < ?", (now - 60,))
+    conn.commit()
+
     if now < film[3]:
         remaining = film[3] - now
         return f"""
@@ -339,19 +351,6 @@ def watch(ticket_id):
         </body></html>
         """
 
-    # EMAIL ONLY ONCE
-    cursor.execute("SELECT sent FROM email_log WHERE ticket_id=?", (ticket_id,))
-    sent = cursor.fetchone()
-
-    if not sent:
-        send_email(
-            ticket[2],
-            "🎬 PREMIERE IS LIVE",
-            f"Hi {ticket[1]}, the premiere has started. Join now!"
-        )
-        cursor.execute("INSERT INTO email_log VALUES (?,1)", (ticket_id,))
-        conn.commit()
-
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
@@ -364,59 +363,50 @@ def watch(ticket_id):
     """
 
 # -------------------------
-# ADMIN (FIXED LOGIN UI + LIVE VIEWERS)
+# ADMIN (SESSION + FULL DATA)
 # -------------------------
-@app.route("/admin", methods=["GET", "POST"])
+@app.route("/admin", methods=["GET","POST"])
 def admin():
 
-    pass_input = request.args.get("pass") or request.form.get("pass")
+    if "admin" not in session:
+        if request.method == "POST":
+            if request.form.get("password") == ADMIN_PASSWORD:
+                session["admin"] = True
+                return redirect("/admin")
 
-    if pass_input != ADMIN_PASSWORD:
         return f"""
         <html><head>{BASE_STYLE}</head><body>
         <div class="container">
             <h2 class="glow">🔐 ADMIN LOGIN</h2>
             <div class="card">
-                <form method="GET">
-                    <input name="pass" type="password" placeholder="Enter Password">
-                    <button type="submit">Unlock</button>
+                <form method="POST">
+                    <input type="password" name="password" placeholder="Enter Password">
+                    <button>Login</button>
                 </form>
             </div>
         </div>
         </body></html>
         """
 
-    now = int(time.time())
-    cutoff = now - 60
-
-    cursor.execute("""
-    SELECT tickets.name, tickets.email
-    FROM viewers
-    JOIN tickets ON tickets.id = viewers.ticket_id
-    WHERE viewers.last_seen > ?
-    """, (cutoff,))
-    live = cursor.fetchall()
+    cursor.execute("SELECT COUNT(*) FROM viewers")
+    live_count = cursor.fetchone()[0]
 
     cursor.execute("SELECT * FROM tickets ORDER BY id DESC")
     users = cursor.fetchall()
 
+    cursor.execute("SELECT * FROM logins ORDER BY id DESC LIMIT 20")
+    logins = cursor.fetchall()
+
     html = "<h1 class='glow'>🎟 ADMIN PANEL</h1>"
+    html += f"<h2>🟢 LIVE VIEWERS: {live_count}</h2>"
 
-    html += f"<h2>🟢 LIVE VIEWERS ({len(live)})</h2>"
+    html += "<h2>👤 RECENT LOGINS</h2>"
+    for l in logins:
+        html += f"<div class='card'><p>{l[1]} ({l[2]})</p></div>"
 
-    for v in live:
-        html += f"<div class='card'><p class='live'>{v[0]} ({v[1]})</p></div>"
-
-    html += "<h2>🎟 ALL TICKETS</h2>"
-
+    html += "<h2>🎟 ALL USERS</h2>"
     for u in users:
-        html += f"""
-        <div class="card">
-            <p>ID: {u[0]}</p>
-            <p>{u[1]}</p>
-            <p>{u[2]}</p>
-        </div>
-        """
+        html += f"<div class='card'><p>{u[1]} - {u[2]}</p></div>"
 
     return f"<html><head>{BASE_STYLE}</head><body><div class='container'>{html}</div></body></html>"
 
