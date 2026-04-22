@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS films (
 conn.commit()
 
 # -------------------------
-# PREMIERE TIME (APRIL 24, 7PM)
+# PREMIERE TIME
 # -------------------------
 release_time = int(datetime.datetime(2026, 4, 24, 19, 0).timestamp())
 
@@ -57,65 +57,72 @@ MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
 
 # -------------------------
-# CINEMATIC UI
+# PREMIUM CINEMATIC UI
 # -------------------------
 BASE_STYLE = """
 <style>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 body {
     margin: 0;
-    font-family: Arial;
-    background: radial-gradient(circle at top, #111, #000);
+    font-family: 'Segoe UI', Arial;
+    background: radial-gradient(circle at top, #0a0a0a, #000);
     color: white;
     text-align: center;
-    font-size: 22px;
+    font-size: 26px;
 }
 
 .container {
-    padding: 30px 16px;
+    padding: 40px 18px;
 }
 
 .card {
-    background: rgba(255,255,255,0.08);
-    border-radius: 20px;
-    padding: 28px;
-    margin: 22px auto;
+    background: rgba(255,255,255,0.06);
+    border-radius: 24px;
+    padding: 32px;
+    margin: 24px auto;
     max-width: 95%;
+    box-shadow: 0 0 40px rgba(0,0,0,0.9);
+    backdrop-filter: blur(12px);
 }
 
-h1 { font-size: 40px; }
-h2 { font-size: 32px; }
+h1 { font-size: 52px; }
+h2 { font-size: 38px; }
 
 a, button {
     display: block;
-    margin-top: 18px;
-    padding: 20px;
-    background: #1db954;
+    margin-top: 20px;
+    padding: 22px;
+    background: linear-gradient(135deg, #1db954, #00ffcc);
     color: black;
-    border-radius: 14px;
+    border-radius: 16px;
     font-weight: bold;
-    font-size: 22px;
+    font-size: 24px;
     text-decoration: none;
 }
 
 input {
-    width: 95%;
-    padding: 18px;
+    width: 96%;
+    padding: 20px;
     margin: 14px 0;
-    border-radius: 12px;
+    border-radius: 14px;
     border: none;
-    font-size: 20px;
+    font-size: 22px;
 }
 
 .video-box iframe {
     width: 100%;
     aspect-ratio: 16/9;
-    border-radius: 16px;
+    border-radius: 18px;
 }
 
 .glow {
-    text-shadow: 0 0 12px #1db954;
+    text-shadow: 0 0 18px #1db954;
+}
+
+.badge {
+    font-size: 20px;
+    color: #00ffcc;
 }
 </style>
 """
@@ -162,6 +169,7 @@ def films():
         html += f"""
         <div class="card">
             <h2>{f[1]}</h2>
+            <p class="badge">Official Selection – Cinebration International Film Festival 2026</p>
             <p>{count}/{MAX_TICKETS} tickets</p>
             {button}
         </div>
@@ -193,7 +201,7 @@ def claim(film_id):
     """
 
 # -------------------------
-# SUBMIT
+# SUBMIT (WITH LOADING FIX)
 # -------------------------
 @app.route("/submit/<int:film_id>", methods=["POST"])
 def submit(film_id):
@@ -224,14 +232,20 @@ def submit(film_id):
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
 
-    <h2 class="glow">🎟 ACCESS GRANTED</h2>
-
     <div class="card">
-        <p>Ticket ID: #{ticket_id}</p>
-        <a href="/watch/{ticket_id}">▶ Enter Premiere</a>
+        <h2>🎟 Processing Ticket...</h2>
+        <p>Please wait...</p>
     </div>
 
-    </div></body></html>
+    </div>
+
+    <script>
+    setTimeout(function() {{
+        window.location.href = "/watch/{ticket_id}";
+    }}, 2000);
+    </script>
+
+    </body></html>
     """
 
 # -------------------------
@@ -316,7 +330,7 @@ def watch(ticket_id):
     """
 
 # -------------------------
-# 🔐 ADMIN PANEL (PASSWORD PROTECTED)
+# ADMIN
 # -------------------------
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
@@ -324,43 +338,15 @@ def admin():
     pass_input = request.args.get("pass") or request.form.get("pass")
 
     if pass_input != ADMIN_PASSWORD:
-        return f"""
-        <html>
-        <body style="background:#000; color:white; text-align:center; font-family:Arial; padding-top:100px;">
-            <h2>🔐 Admin Locked</h2>
-
-            <form method="GET">
-                <input name="pass" placeholder="Enter Password"
-                style="padding:15px; font-size:18px; width:80%; border-radius:10px;">
-                <br><br>
-                <button style="padding:15px; font-size:18px; background:#1db954; border:none; border-radius:10px;">
-                    Unlock
-                </button>
-            </form>
-        </body>
-        </html>
-        """
+        return "<h2>🔐 Admin Locked</h2>"
 
     cursor.execute("SELECT * FROM tickets ORDER BY id DESC")
     users = cursor.fetchall()
 
-    html = """
-    <h2>🎟 XineRent Admin Panel</h2>
-    <p>All Tickets</p>
-    <hr>
-    """
+    html = "<h2>🎟 XineRent Admin Panel</h2><hr>"
 
     for u in users:
-        html += f"""
-        <div style="margin:10px; padding:10px; border:1px solid #333;">
-            <b>ID:</b> {u[0]}<br>
-            <b>Name:</b> {u[1]}<br>
-            <b>Email:</b> {u[2]}<br>
-            <b>Film ID:</b> {u[3]}<br>
-            <b>Time:</b> {u[4]}
-        </div>
-        <hr>
-        """
+        html += f"<p>{u}</p><hr>"
 
     return html
 
