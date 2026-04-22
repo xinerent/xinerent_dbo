@@ -57,7 +57,7 @@ MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
 
 # -------------------------
-# 🎬 CINEMATIC GOLD UI
+# 🎬 ULTRA CINEMATIC BIG UI
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -69,60 +69,66 @@ body {
     background: radial-gradient(circle at top, #050505, #000);
     color: #f5e6c8;
     text-align: center;
-    font-size: 30px;
+
+    /* 🔥 VERY BIG BASE FONT */
+    font-size: 38px;
 }
 
+/* PAGE SPACING */
 .container {
-    padding: 50px 20px;
+    padding: 80px 22px;
 }
 
-/* GOLD CARD */
+/* GOLD CINEMA CARD */
 .card {
     background: linear-gradient(145deg, #0a0a0a, #111);
-    border-radius: 28px;
-    padding: 40px;
-    margin: 30px auto;
-    max-width: 95%;
+    border-radius: 32px;
+    padding: 55px;
+    margin: 40px auto;
+    max-width: 98%;
     box-shadow:
-        0 0 60px rgba(0,0,0,1),
-        0 0 20px rgba(212,175,55,0.2);
-    border: 1px solid rgba(212,175,55,0.25);
+        0 0 100px rgba(0,0,0,1),
+        0 0 30px rgba(212,175,55,0.25);
+    border: 1px solid rgba(212,175,55,0.3);
 }
 
-/* BIG HEADINGS */
-h1 { font-size: 64px; }
-h2 { font-size: 46px; }
-p  { font-size: 28px; }
+/* 🔥 MASSIVE TEXT */
+h1 { font-size: 90px; }
+h2 { font-size: 60px; }
+h3 { font-size: 46px; }
+p  { font-size: 34px; }
 
-/* GOLD GLOW TEXT */
+/* GOLD GLOW */
 .glow {
     color: #d4af37;
-    text-shadow: 0 0 10px #d4af37, 0 0 30px rgba(212,175,55,0.6);
+    text-shadow:
+        0 0 18px #d4af37,
+        0 0 50px rgba(212,175,55,0.6);
 }
 
 /* BUTTONS */
 a, button {
     display: block;
-    margin-top: 24px;
-    padding: 26px;
+    margin-top: 30px;
+    padding: 34px;
     background: linear-gradient(135deg, #d4af37, #f5e6c8);
     color: black;
-    border-radius: 18px;
+    border-radius: 22px;
     font-weight: bold;
-    font-size: 28px;
+    font-size: 36px;
     text-decoration: none;
     border: none;
-    box-shadow: 0 10px 30px rgba(212,175,55,0.5);
+    box-shadow: 0 15px 50px rgba(212,175,55,0.6);
 }
 
 /* INPUT */
 input {
-    width: 96%;
-    padding: 24px;
-    margin: 16px 0;
-    border-radius: 16px;
+    width: 98%;
+    padding: 30px;
+    margin: 20px 0;
+    border-radius: 18px;
     border: none;
-    font-size: 26px;
+    font-size: 34px;
     background: #111;
     color: #f5e6c8;
 }
@@ -131,21 +137,21 @@ input {
 .video-box iframe {
     width: 100%;
     aspect-ratio: 16/9;
-    border-radius: 20px;
+    border-radius: 24px;
 }
 
 /* BADGE */
 .badge {
-    font-size: 24px;
+    font-size: 32px;
     color: #d4af37;
 }
 
 /* MOBILE BOOST */
 @media (max-width: 480px) {
-    body { font-size: 32px; }
-    h1 { font-size: 70px; }
-    h2 { font-size: 50px; }
-    a, button { font-size: 30px; padding: 28px; }
+    body { font-size: 42px; }
+    h1 { font-size: 100px; }
+    h2 { font-size: 70px; }
+    a, button { font-size: 40px; padding: 38px; }
 }
 </style>
 """
@@ -257,7 +263,7 @@ def submit(film_id):
 
     <div class="card">
         <h2>🎟 Ticket Created</h2>
-        <p>Please wait...</p>
+        <p>Preparing your cinema access...</p>
     </div>
 
     </div>
@@ -296,7 +302,7 @@ def enter():
     <div class="card">
         <form method="POST">
             <input name="email" placeholder="Enter email" required>
-            <button type="submit">Enter</button>
+            <button type="submit">Enter Cinema</button>
         </form>
     </div>
 
