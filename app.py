@@ -3,6 +3,8 @@ import sqlite3
 import time
 import os
 import datetime
+import smtplib
+from email.mime.text import MIMEText
 
 app = Flask(__name__)
 
@@ -31,10 +33,25 @@ CREATE TABLE IF NOT EXISTS films (
 )
 """)
 
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS viewers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticket_id INTEGER,
+    last_seen INTEGER
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS email_log (
+    ticket_id INTEGER PRIMARY KEY,
+    sent INTEGER
+)
+""")
+
 conn.commit()
 
 # -------------------------
-# PREMIERE TIME (APRIL 24, 7PM)
+# PREMIERE TIME
 # -------------------------
 release_time = int(datetime.datetime(2026, 4, 24, 19, 0).timestamp())
 
@@ -57,7 +74,28 @@ MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
 
 # -------------------------
-# 🎬 ULTRA CINEMATIC BIG UI
+# EMAIL SYSTEM
+# -------------------------
+def send_email(to_email, subject, message):
+    sender_email = "YOUR_EMAIL@gmail.com"
+    app_password = "YOUR_APP_PASSWORD"
+
+    msg = MIMEText(message)
+    msg["Subject"] = subject
+    msg["From"] = sender_email
+    msg["To"] = to_email
+
+    try:
+        server = smtplib.SMTP("smtp.gmail.com", 587)
+        server.starttls()
+        server.login(sender_email, app_password)
+        server.sendmail(sender_email, to_email, msg.as_string())
+        server.quit()
+    except Exception as e:
+        print("Email error:", e)
+
+# -------------------------
+# UI (BIGGER + WHITE + GOLD)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -65,93 +103,76 @@ BASE_STYLE = """
 
 body {
     margin: 0;
-    font-family: 'Segoe UI', Arial;
+    font-family: Arial;
     background: radial-gradient(circle at top, #050505, #000);
-    color: #f5e6c8;
+    color: #ffffff;
     text-align: center;
-
-    /* 🔥 VERY BIG BASE FONT */
-    font-size: 38px;
+    font-size: 34px;
 }
 
-/* PAGE SPACING */
-.container {
-    padding: 80px 22px;
-}
+.container { padding: 70px 20px; }
 
-/* GOLD CINEMA CARD */
 .card {
-    background: linear-gradient(145deg, #0a0a0a, #111);
-    border-radius: 32px;
-    padding: 55px;
-    margin: 40px auto;
+    background: #0f0f0f;
+    border-radius: 28px;
+    padding: 50px;
+    margin: 35px auto;
     max-width: 98%;
-    box-shadow:
-        0 0 100px rgba(0,0,0,1),
-        0 0 30px rgba(212,175,55,0.25);
     border: 1px solid rgba(212,175,55,0.3);
 }
 
-/* 🔥 MASSIVE TEXT */
 h1 { font-size: 90px; }
-h2 { font-size: 60px; }
-h3 { font-size: 46px; }
+h2 { font-size: 65px; }
 p  { font-size: 34px; }
 
-/* GOLD GLOW */
 .glow {
     color: #d4af37;
-    text-shadow:
-        0 0 18px #d4af37,
-        0 0 50px rgba(212,175,55,0.6);
+    text-shadow: 0 0 25px #d4af37;
+}
+
+/* BIG TIMER FIX */
+.timer {
+    font-size: 110px;
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 0 25px #fff;
 }
 
 /* BUTTONS */
 a, button {
     display: block;
     margin-top: 30px;
-    padding: 34px;
+    padding: 35px;
     background: linear-gradient(135deg, #d4af37, #f5e6c8);
     color: black;
     border-radius: 22px;
+    font-size: 38px;
     font-weight: bold;
-    font-size: 36px;
     text-decoration: none;
-    border: none;
-    box-shadow: 0 15px 50px rgba(212,175,55,0.6);
 }
 
 /* INPUT */
 input {
-    width: 98%;
+    width: 95%;
     padding: 30px;
-    margin: 20px 0;
-    border-radius: 18px;
-    border: none;
     font-size: 34px;
     background: #111;
-    color: #f5e6c8;
+    color: white;
+    border: 1px solid #333;
+    border-radius: 15px;
 }
 
 /* VIDEO */
 .video-box iframe {
     width: 100%;
     aspect-ratio: 16/9;
-    border-radius: 24px;
+    border-radius: 20px;
 }
 
-/* BADGE */
-.badge {
-    font-size: 32px;
-    color: #d4af37;
-}
-
-/* MOBILE BOOST */
-@media (max-width: 480px) {
-    body { font-size: 42px; }
-    h1 { font-size: 100px; }
-    h2 { font-size: 70px; }
-    a, button { font-size: 40px; padding: 38px; }
+/* LIVE DOT */
+.live {
+    color: #00ff88;
+    font-weight: bold;
 }
 </style>
 """
@@ -164,16 +185,14 @@ def home():
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-
-    <h1 class="glow">🎬 XineRent</h1>
-
-    <div class="card">
-        <a href="/films">🎟 Get Ticket</a>
-        <a href="/enter">🎬 Enter Premiere</a>
-        <a href="/admin">🔐 Admin Panel</a>
+        <h1 class="glow">🎬 XineRent</h1>
+        <div class="card">
+            <a href="/films">🎟 Get Ticket</a>
+            <a href="/enter">🎬 Enter Premiere</a>
+            <a href="/admin">🔐 Admin Panel</a>
+        </div>
     </div>
-
-    </div></body></html>
+    </body></html>
     """
 
 # -------------------------
@@ -190,22 +209,18 @@ def films():
         cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=?", (f[0],))
         count = cursor.fetchone()[0]
 
-        if count >= MAX_TICKETS:
-            button = "<p>❌ SOLD OUT</p>"
-        else:
-            button = f"<a href='/claim/{f[0]}'>🎟 Claim Ticket</a>"
+        button = "<p>❌ SOLD OUT</p>" if count >= MAX_TICKETS else f"<a href='/claim/{f[0]}'>🎟 Claim Ticket</a>"
 
         html += f"""
         <div class="card">
             <h2>{f[1]}</h2>
-            <p class="badge">Official Selection – Cinebration International Film Festival 2026</p>
-            <p>{count}/{MAX_TICKETS} tickets sold</p>
+            <p class="glow">Official Selection – Cinebration International Film Festival 2026</p>
+            <p>{count}/{MAX_TICKETS} tickets</p>
             {button}
         </div>
         """
 
-    html += "</div></body></html>"
-    return html
+    return html + "</div></body></html>"
 
 # -------------------------
 # CLAIM
@@ -215,18 +230,16 @@ def claim(film_id):
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-
-    <h2 class="glow">🎟 Claim Ticket</h2>
-
-    <div class="card">
-        <form action="/submit/{film_id}" method="POST">
-            <input name="name" placeholder="Your Name" required>
-            <input name="email" placeholder="Email" required>
-            <button type="submit">Get Ticket</button>
-        </form>
+        <h2 class="glow">🎟 Claim Ticket</h2>
+        <div class="card">
+            <form action="/submit/{film_id}" method="POST">
+                <input name="name" placeholder="Your Name" required>
+                <input name="email" placeholder="Email" required>
+                <button type="submit">Get Ticket</button>
+            </form>
+        </div>
     </div>
-
-    </div></body></html>
+    </body></html>
     """
 
 # -------------------------
@@ -257,25 +270,7 @@ def submit(film_id):
 
     ticket_id = cursor.lastrowid
 
-    return f"""
-    <html><head>{BASE_STYLE}</head><body>
-    <div class="container">
-
-    <div class="card">
-        <h2>🎟 Ticket Created</h2>
-        <p>Preparing your cinema access...</p>
-    </div>
-
-    </div>
-
-    <script>
-    setTimeout(function() {{
-        window.location.href = "/watch/{ticket_id}";
-    }}, 2000);
-    </script>
-
-    </body></html>
-    """
+    return redirect(f"/watch/{ticket_id}")
 
 # -------------------------
 # ENTER
@@ -290,34 +285,30 @@ def enter():
 
         if ticket:
             return redirect(f"/watch/{ticket[0]}")
-        else:
-            return "<h2>❌ No ticket found</h2>"
+        return "<h2>❌ No ticket found</h2>"
 
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-
-    <h2 class="glow">🎬 Enter Premiere</h2>
-
-    <div class="card">
-        <form method="POST">
-            <input name="email" placeholder="Enter email" required>
-            <button type="submit">Enter Cinema</button>
-        </form>
+        <h2 class="glow">🎬 Enter Premiere</h2>
+        <div class="card">
+            <form method="POST">
+                <input name="email" placeholder="Enter email" required>
+                <button type="submit">Enter</button>
+            </form>
+        </div>
     </div>
-
-    </div></body></html>
+    </body></html>
     """
 
 # -------------------------
-# WATCH
+# WATCH (FIXED TIMER + LIVE VIEWERS + EMAIL SAFE)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
 
     cursor.execute("SELECT * FROM tickets WHERE id=?", (ticket_id,))
     ticket = cursor.fetchone()
-
     if not ticket:
         return "<h2>❌ Invalid Ticket</h2>"
 
@@ -326,40 +317,54 @@ def watch(ticket_id):
 
     now = int(time.time())
 
+    # LIVE VIEWERS UPDATE
+    cursor.execute("""
+    INSERT OR REPLACE INTO viewers (ticket_id, last_seen)
+    VALUES (?, ?)
+    """, (ticket_id, now))
+    conn.commit()
+
+    # PRE PREMIERE
     if now < film[3]:
         remaining = film[3] - now
-        hours = remaining // 3600
-        minutes = (remaining % 3600) // 60
-
         return f"""
         <html><head>{BASE_STYLE}</head><body>
         <div class="container">
-
-        <h2 class="glow">⏳ Premiere Starts Soon</h2>
-
-        <div class="card">
-            <p>Welcome {ticket[1]}</p>
-            <h1>{hours}h {minutes}m</h1>
+            <h2 class="glow">⏳ PREMIERE LOCKED</h2>
+            <div class="card">
+                <p>Welcome {ticket[1]}</p>
+                <div class="timer">{remaining//3600}h {(remaining%3600)//60}m</div>
+            </div>
         </div>
-
-        </div></body></html>
+        </body></html>
         """
+
+    # EMAIL ONLY ONCE
+    cursor.execute("SELECT sent FROM email_log WHERE ticket_id=?", (ticket_id,))
+    sent = cursor.fetchone()
+
+    if not sent:
+        send_email(
+            ticket[2],
+            "🎬 PREMIERE IS LIVE",
+            f"Hi {ticket[1]}, the premiere has started. Join now!"
+        )
+        cursor.execute("INSERT INTO email_log VALUES (?,1)", (ticket_id,))
+        conn.commit()
 
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-
-    <h2 class="glow">🎬 LIVE PREMIERE</h2>
-
-    <div class="card video-box">
-        <iframe src="{film[2]}" allowfullscreen></iframe>
+        <h2 class="glow">🎬 LIVE PREMIERE</h2>
+        <div class="card video-box">
+            <iframe src="{film[2]}" allowfullscreen></iframe>
+        </div>
     </div>
-
-    </div></body></html>
+    </body></html>
     """
 
 # -------------------------
-# ADMIN
+# ADMIN (FIXED LOGIN UI + LIVE VIEWERS)
 # -------------------------
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
@@ -367,28 +372,56 @@ def admin():
     pass_input = request.args.get("pass") or request.form.get("pass")
 
     if pass_input != ADMIN_PASSWORD:
-        return "<h2>🔐 Admin Locked</h2>"
+        return f"""
+        <html><head>{BASE_STYLE}</head><body>
+        <div class="container">
+            <h2 class="glow">🔐 ADMIN LOGIN</h2>
+            <div class="card">
+                <form method="GET">
+                    <input name="pass" type="password" placeholder="Enter Password">
+                    <button type="submit">Unlock</button>
+                </form>
+            </div>
+        </div>
+        </body></html>
+        """
+
+    now = int(time.time())
+    cutoff = now - 60
+
+    cursor.execute("""
+    SELECT tickets.name, tickets.email
+    FROM viewers
+    JOIN tickets ON tickets.id = viewers.ticket_id
+    WHERE viewers.last_seen > ?
+    """, (cutoff,))
+    live = cursor.fetchall()
 
     cursor.execute("SELECT * FROM tickets ORDER BY id DESC")
     users = cursor.fetchall()
 
-    html = "<h2>🎟 Admin Panel</h2><hr>"
+    html = "<h1 class='glow'>🎟 ADMIN PANEL</h1>"
+
+    html += f"<h2>🟢 LIVE VIEWERS ({len(live)})</h2>"
+
+    for v in live:
+        html += f"<div class='card'><p class='live'>{v[0]} ({v[1]})</p></div>"
+
+    html += "<h2>🎟 ALL TICKETS</h2>"
 
     for u in users:
         html += f"""
         <div class="card">
-            <p><b>ID:</b> {u[0]}</p>
-            <p><b>Name:</b> {u[1]}</p>
-            <p><b>Email:</b> {u[2]}</p>
-            <p><b>Film:</b> {u[3]}</p>
+            <p>ID: {u[0]}</p>
+            <p>{u[1]}</p>
+            <p>{u[2]}</p>
         </div>
         """
 
-    return html
+    return f"<html><head>{BASE_STYLE}</head><body><div class='container'>{html}</div></body></html>"
 
 # -------------------------
 # RUN
 # -------------------------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
