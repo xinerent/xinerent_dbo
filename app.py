@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, redirect
 import sqlite3
 import time
 import os
@@ -48,7 +48,12 @@ if cursor.fetchone()[0] == 0:
     conn.commit()
 
 # -------------------------
-# CINEMATIC UI + MOBILE FIX + VIDEO FIX
+# SETTINGS
+# -------------------------
+MAX_TICKETS = 700
+
+# -------------------------
+# UI (BIG + CINEMATIC)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -56,11 +61,11 @@ BASE_STYLE = """
 
 body {
     margin: 0;
-    font-family: Arial, sans-serif;
-    background: radial-gradient(circle at top, #1a1a1a, #000);
+    font-family: Arial;
+    background: radial-gradient(circle at top, #111, #000);
     color: white;
     text-align: center;
-    font-size: 18px;
+    font-size: 20px;
 }
 
 .container {
@@ -68,79 +73,49 @@ body {
 }
 
 .card {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.07);
     border-radius: 18px;
-    padding: 22px;
-    margin: 18px auto;
+    padding: 25px;
+    margin: 20px auto;
     max-width: 95%;
-    width: 100%;
-    box-shadow: 0 0 30px rgba(0,0,0,0.7);
-    backdrop-filter: blur(12px);
+    box-shadow: 0 0 30px rgba(0,0,0,0.8);
 }
 
-h1 { font-size: 30px; }
-h2 { font-size: 26px; }
-h3 { font-size: 22px; }
+h1 { font-size: 34px; }
+h2 { font-size: 28px; }
+h3 { font-size: 24px; }
 
-a {
-    display: inline-block;
-    margin-top: 12px;
-    padding: 14px 18px;
+a, button {
+    display: block;
+    margin-top: 15px;
+    padding: 18px;
     background: #1db954;
     color: black;
     text-decoration: none;
     border-radius: 12px;
     font-weight: bold;
-    font-size: 18px;
-}
-
-button {
-    width: 100%;
-    padding: 16px;
-    background: #1db954;
-    border: none;
-    border-radius: 12px;
-    font-weight: bold;
-    font-size: 18px;
+    font-size: 20px;
 }
 
 input {
     width: 95%;
-    padding: 14px;
-    margin: 10px 0;
+    padding: 16px;
+    margin: 12px 0;
     border-radius: 10px;
     border: none;
-    font-size: 16px;
+    font-size: 18px;
+}
+
+.video-box iframe {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: 14px;
 }
 
 .glow {
-    text-shadow: 0 0 12px #1db954;
-}
-
-/* 🎬 FIXED VIDEO CONTAINER */
-.video-box {
-    width: 100%;
-    max-width: 900px;
-    margin: 0 auto;
-}
-
-iframe {
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    border-radius: 16px;
-    box-shadow: 0 0 25px rgba(0,0,0,0.8);
-}
-
-/* MOBILE FIX */
-html, body {
-    -webkit-text-size-adjust: 100%;
-    touch-action: manipulation;
+    text-shadow: 0 0 10px #1db954;
 }
 </style>
-
-<!-- APP MODE -->
-<link rel="manifest" href="/manifest.json">
 """
 
 # -------------------------
@@ -149,23 +124,21 @@ html, body {
 @app.route("/")
 def home():
     return f"""
-    <html>
-    <head>{BASE_STYLE}</head>
-    <body>
+    <html><head>{BASE_STYLE}</head><body>
 
     <div class="container">
 
-        <h1 class="glow">🎬 XineRent DBO</h1>
-        <p>Digital Box Office System</p>
+    <h1 class="glow">🎬 XineRent</h1>
+    <p>Digital Box Office</p>
 
-        <div class="card">
-            <a href="/films">🎥 Enter Cinema</a>
-        </div>
+    <div class="card">
+        <a href="/films">🎟 Get Ticket</a>
+        <a href="/enter">🎬 Enter Premiere</a>
+    </div>
 
     </div>
 
-    </body>
-    </html>
+    </body></html>
     """
 
 # -------------------------
@@ -174,22 +147,24 @@ def home():
 @app.route("/films")
 def films():
     cursor.execute("SELECT * FROM films")
-    data = cursor.fetchall()
+    films = cursor.fetchall()
 
-    html = f"""
-    <html>
-    <head>{BASE_STYLE}</head>
-    <body>
+    html = f"<html><head>{BASE_STYLE}</head><body><div class='container'>"
 
-    <div class="container">
-        <h2 class="glow">🎥 Now Showing</h2>
-    """
+    for f in films:
+        cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=?", (f[0],))
+        count = cursor.fetchone()[0]
 
-    for f in data:
+        if count >= MAX_TICKETS:
+            button = "<p>❌ SOLD OUT</p>"
+        else:
+            button = f"<a href='/claim/{f[0]}'>🎟 Claim Ticket</a>"
+
         html += f"""
         <div class="card">
             <h3>{f[1]}</h3>
-            <a href="/claim/{f[0]}">🎟 Claim Ticket</a>
+            <p>{count}/{MAX_TICKETS} tickets</p>
+            {button}
         </div>
         """
 
@@ -202,26 +177,23 @@ def films():
 @app.route("/claim/<int:film_id>")
 def claim(film_id):
     return f"""
-    <html>
-    <head>{BASE_STYLE}</head>
-    <body>
+    <html><head>{BASE_STYLE}</head><body>
 
     <div class="container">
 
-        <h2 class="glow">🎟 Claim Premiere Ticket</h2>
+    <h2 class="glow">🎟 Claim Ticket</h2>
 
-        <div class="card">
-            <form action="/submit/{film_id}" method="POST">
-                <input name="name" placeholder="Your Name" required>
-                <input name="email" placeholder="Email" required>
-                <button type="submit">Get Access</button>
-            </form>
-        </div>
+    <div class="card">
+        <form action="/submit/{film_id}" method="POST">
+            <input name="name" placeholder="Your Name" required>
+            <input name="email" placeholder="Email" required>
+            <button type="submit">Get Ticket</button>
+        </form>
+    </div>
 
     </div>
 
-    </body>
-    </html>
+    </body></html>
     """
 
 # -------------------------
@@ -232,6 +204,18 @@ def submit(film_id):
     name = request.form.get("name")
     email = request.form.get("email")
 
+    cursor.execute("SELECT id FROM tickets WHERE email=? AND film_id=?", (email, film_id))
+    existing = cursor.fetchone()
+
+    if existing:
+        return redirect(f"/watch/{existing[0]}")
+
+    cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=?", (film_id,))
+    count = cursor.fetchone()[0]
+
+    if count >= MAX_TICKETS:
+        return "<h2>❌ Tickets Sold Out</h2>"
+
     cursor.execute("""
     INSERT INTO tickets (name, email, film_id, created_at)
     VALUES (?, ?, ?, ?)
@@ -239,31 +223,61 @@ def submit(film_id):
     conn.commit()
 
     ticket_id = cursor.lastrowid
-    watch_url = f"/watch/{ticket_id}"
 
     return f"""
-    <html>
-    <head>{BASE_STYLE}</head>
-    <body>
+    <html><head>{BASE_STYLE}</head><body>
 
     <div class="container">
 
-        <h2 class="glow">🎟 ACCESS GRANTED</h2>
+    <h2 class="glow">🎟 ACCESS GRANTED</h2>
 
-        <div class="card">
-            <p><b>Ticket ID:</b> #{ticket_id}</p>
-            <p>Your cinema entry is ready</p>
-            <a href="{watch_url}">▶ Enter Premiere Room</a>
-        </div>
+    <div class="card">
+        <p><b>Ticket ID:</b> #{ticket_id}</p>
+        <a href="/watch/{ticket_id}">▶ Enter Premiere</a>
+    </div>
 
     </div>
 
-    </body>
-    </html>
+    </body></html>
     """
 
 # -------------------------
-# WATCH (FIXED CINEMA PLAYER + COUNTDOWN)
+# ENTER (LOGIN)
+# -------------------------
+@app.route("/enter", methods=["GET", "POST"])
+def enter():
+    if request.method == "POST":
+        email = request.form.get("email")
+
+        cursor.execute("SELECT id FROM tickets WHERE email=?", (email,))
+        ticket = cursor.fetchone()
+
+        if ticket:
+            return redirect(f"/watch/{ticket[0]}")
+        else:
+            return "<h3>❌ No ticket found</h3>"
+
+    return f"""
+    <html><head>{BASE_STYLE}</head><body>
+
+    <div class="container">
+
+    <h2 class="glow">🎬 Enter Premiere</h2>
+
+    <div class="card">
+        <form method="POST">
+            <input name="email" placeholder="Enter your email" required>
+            <button type="submit">Enter</button>
+        </form>
+    </div>
+
+    </div>
+
+    </body></html>
+    """
+
+# -------------------------
+# WATCH
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -277,69 +291,26 @@ def watch(ticket_id):
     cursor.execute("SELECT * FROM films WHERE id=?", (ticket[3],))
     film = cursor.fetchone()
 
-    if not film:
-        return "<h2>❌ Film not found</h2>"
-
-    release_time = film[3]
     now = int(time.time())
 
-    # ⏳ COUNTDOWN
-    if now < release_time:
-        remaining = release_time - now
+    if now < film[3]:
+        return f"<h2>⏳ Premiere starts soon</h2>"
 
-        return f"""
-        <html>
-        <head>{BASE_STYLE}</head>
-        <body>
-
-        <div class="container">
-
-            <h2 class="glow">⏳ PREMIERE LOCKED</h2>
-
-            <div class="card">
-                <p>Welcome {ticket[1]}</p>
-                <p>Starts in: <b>{remaining} seconds</b></p>
-            </div>
-
-        </div>
-
-        </body>
-        </html>
-        """
-
-    # 🎬 LIVE PLAYER (FIXED)
     return f"""
-    <html>
-    <head>{BASE_STYLE}</head>
-    <body>
+    <html><head>{BASE_STYLE}</head><body>
 
     <div class="container">
 
-        <h2 class="glow">🎬 LIVE PREMIERE</h2>
+    <h2 class="glow">🎬 LIVE PREMIERE</h2>
 
-        <div class="card video-box">
-            <iframe src="{film[2]}" frameborder="0" allowfullscreen></iframe>
-        </div>
+    <div class="card video-box">
+        <iframe src="{film[2]}" allowfullscreen></iframe>
+    </div>
 
     </div>
 
-    </body>
-    </html>
+    </body></html>
     """
-
-# -------------------------
-# APP MODE
-# -------------------------
-@app.route("/manifest.json")
-def manifest():
-    return {
-        "name": "XineRent Cinema",
-        "short_name": "XineRent",
-        "start_url": "/",
-        "display": "standalone",
-        "background_color": "#000000",
-        "theme_color": "#1db954"
-    }
 
 # -------------------------
 # RUN
