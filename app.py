@@ -34,13 +34,10 @@ CREATE TABLE IF NOT EXISTS films (
 conn.commit()
 
 # -------------------------
-# SET REAL PREMIERE TIME
+# PREMIERE TIME (APRIL 24, 7PM)
 # -------------------------
 release_time = int(datetime.datetime(2026, 4, 24, 19, 0).timestamp())
 
-# -------------------------
-# DEFAULT FILM
-# -------------------------
 cursor.execute("SELECT COUNT(*) FROM films")
 if cursor.fetchone()[0] == 0:
     cursor.execute("""
@@ -59,11 +56,11 @@ if cursor.fetchone()[0] == 0:
 MAX_TICKETS = 700
 
 # -------------------------
-# UI (BIG + CINEMATIC)
+# CINEMATIC BIG UI
 # -------------------------
 BASE_STYLE = """
 <style>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
 body {
     margin: 0;
@@ -71,49 +68,68 @@ body {
     background: radial-gradient(circle at top, #111, #000);
     color: white;
     text-align: center;
-    font-size: 20px;
+    font-size: 22px;
 }
 
-.container { padding: 25px 15px; }
+.container {
+    padding: 30px 16px;
+}
 
 .card {
-    background: rgba(255,255,255,0.07);
-    border-radius: 18px;
-    padding: 25px;
-    margin: 20px auto;
+    background: rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 28px;
+    margin: 22px auto;
     max-width: 95%;
+    box-shadow: 0 0 25px rgba(0,0,0,0.8);
 }
 
-h1 { font-size: 34px; }
-h2 { font-size: 28px; }
+h1 { font-size: 40px; }
+h2 { font-size: 32px; }
+h3 { font-size: 26px; }
+p  { font-size: 20px; }
 
 a, button {
     display: block;
-    margin-top: 15px;
-    padding: 18px;
+    margin-top: 18px;
+    padding: 20px;
     background: #1db954;
     color: black;
-    border-radius: 12px;
+    border-radius: 14px;
     font-weight: bold;
-    font-size: 20px;
+    font-size: 22px;
+    text-decoration: none;
 }
 
 input {
     width: 95%;
-    padding: 16px;
-    margin: 12px 0;
-    border-radius: 10px;
+    padding: 18px;
+    margin: 14px 0;
+    border-radius: 12px;
     border: none;
-    font-size: 18px;
+    font-size: 20px;
 }
 
 .video-box iframe {
     width: 100%;
     aspect-ratio: 16/9;
-    border-radius: 14px;
+    border-radius: 16px;
 }
 
-.glow { text-shadow: 0 0 10px #1db954; }
+.glow {
+    text-shadow: 0 0 12px #1db954;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+}
+
+@media (max-width: 480px) {
+    body { font-size: 24px; }
+    h1 { font-size: 44px; }
+    h2 { font-size: 36px; }
+    a, button { font-size: 24px; padding: 22px; }
+}
 </style>
 """
 
@@ -125,7 +141,9 @@ def home():
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
+
     <h1 class="glow">🎬 XineRent</h1>
+    <p>Digital Box Office System</p>
 
     <div class="card">
         <a href="/films">🎟 Get Ticket</a>
@@ -157,7 +175,7 @@ def films():
         html += f"""
         <div class="card">
             <h2>{f[1]}</h2>
-            <p>{count}/{MAX_TICKETS} tickets</p>
+            <p>{count}/{MAX_TICKETS} tickets sold</p>
             {button}
         </div>
         """
@@ -173,6 +191,7 @@ def claim(film_id):
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
+
     <h2 class="glow">🎟 Claim Ticket</h2>
 
     <div class="card">
@@ -204,7 +223,7 @@ def submit(film_id):
     count = cursor.fetchone()[0]
 
     if count >= MAX_TICKETS:
-        return "<h2>❌ Tickets Sold Out</h2>"
+        return "<h2>❌ SOLD OUT</h2>"
 
     cursor.execute("""
     INSERT INTO tickets (name, email, film_id, created_at)
@@ -221,7 +240,7 @@ def submit(film_id):
     <h2 class="glow">🎟 ACCESS GRANTED</h2>
 
     <div class="card">
-        <p><b>Ticket ID:</b> #{ticket_id}</p>
+        <p>Ticket ID: #{ticket_id}</p>
         <a href="/watch/{ticket_id}">▶ Enter Premiere</a>
     </div>
 
@@ -229,7 +248,7 @@ def submit(film_id):
     """
 
 # -------------------------
-# ENTER
+# ENTER (LOGIN)
 # -------------------------
 @app.route("/enter", methods=["GET", "POST"])
 def enter():
@@ -242,7 +261,7 @@ def enter():
         if ticket:
             return redirect(f"/watch/{ticket[0]}")
         else:
-            return "<h3>❌ No ticket found</h3>"
+            return "<h2>❌ No ticket found</h2>"
 
     return f"""
     <html><head>{BASE_STYLE}</head><body>
@@ -252,7 +271,7 @@ def enter():
 
     <div class="card">
         <form method="POST">
-            <input name="email" placeholder="Enter your email" required>
+            <input name="email" placeholder="Enter email" required>
             <button type="submit">Enter</button>
         </form>
     </div>
@@ -261,7 +280,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (REAL COUNTDOWN)
+# WATCH (REAL TIMER)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -290,7 +309,6 @@ def watch(ticket_id):
 
         <div class="card">
             <p>Welcome {ticket[1]}</p>
-            <p>Starts in:</p>
             <h1>{hours}h {minutes}m</h1>
         </div>
 
