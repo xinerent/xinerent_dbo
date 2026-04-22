@@ -33,7 +33,6 @@ CREATE TABLE IF NOT EXISTS films (
 )
 """)
 
-# FIXED VIEWERS (NO DUPLICATES)
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS viewers (
     ticket_id INTEGER PRIMARY KEY,
@@ -41,7 +40,6 @@ CREATE TABLE IF NOT EXISTS viewers (
 )
 """)
 
-# LOGIN TRACKING
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS logins (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -135,6 +133,17 @@ body {
     margin: 35px auto;
     max-width: 98%;
     border: 1px solid rgba(212,175,55,0.3);
+    color: #ffffff !important;
+}
+
+.card p,
+.card b,
+.card span,
+.card div,
+.card h1,
+.card h2,
+.card h3 {
+    color: #ffffff !important;
 }
 
 h1 { font-size: 90px; }
@@ -261,7 +270,6 @@ def submit(film_id):
     name = request.form.get("name")
     email = request.form.get("email")
 
-    # SAVE LOGIN
     cursor.execute("INSERT INTO logins (name,email,time) VALUES (?,?,?)",
                    (name, email, int(time.time())))
     conn.commit()
@@ -334,11 +342,9 @@ def watch(ticket_id):
 
     now = int(time.time())
 
-    # UPDATE VIEWERS
     cursor.execute("INSERT OR REPLACE INTO viewers (ticket_id,last_seen) VALUES (?,?)", (ticket_id, now))
     conn.commit()
 
-    # REMOVE OLD
     cursor.execute("DELETE FROM viewers WHERE last_seen < ?", (now - 60,))
     conn.commit()
 
