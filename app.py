@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS films (
 conn.commit()
 
 # -------------------------
-# PREMIERE TIME
+# PREMIERE TIME (APRIL 24, 7PM)
 # -------------------------
 release_time = int(datetime.datetime(2026, 4, 24, 19, 0).timestamp())
 
@@ -57,7 +57,7 @@ MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
 
 # -------------------------
-# PREMIUM CINEMATIC UI
+# 🎬 CINEMATIC GOLD UI
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -66,63 +66,86 @@ BASE_STYLE = """
 body {
     margin: 0;
     font-family: 'Segoe UI', Arial;
-    background: radial-gradient(circle at top, #0a0a0a, #000);
-    color: white;
+    background: radial-gradient(circle at top, #050505, #000);
+    color: #f5e6c8;
     text-align: center;
-    font-size: 26px;
+    font-size: 30px;
 }
 
 .container {
-    padding: 40px 18px;
+    padding: 50px 20px;
 }
 
+/* GOLD CARD */
 .card {
-    background: rgba(255,255,255,0.06);
-    border-radius: 24px;
-    padding: 32px;
-    margin: 24px auto;
+    background: linear-gradient(145deg, #0a0a0a, #111);
+    border-radius: 28px;
+    padding: 40px;
+    margin: 30px auto;
     max-width: 95%;
-    box-shadow: 0 0 40px rgba(0,0,0,0.9);
-    backdrop-filter: blur(12px);
+    box-shadow:
+        0 0 60px rgba(0,0,0,1),
+        0 0 20px rgba(212,175,55,0.2);
+    border: 1px solid rgba(212,175,55,0.25);
 }
 
-h1 { font-size: 52px; }
-h2 { font-size: 38px; }
+/* BIG HEADINGS */
+h1 { font-size: 64px; }
+h2 { font-size: 46px; }
+p  { font-size: 28px; }
 
+/* GOLD GLOW TEXT */
+.glow {
+    color: #d4af37;
+    text-shadow: 0 0 10px #d4af37, 0 0 30px rgba(212,175,55,0.6);
+}
+
+/* BUTTONS */
 a, button {
     display: block;
-    margin-top: 20px;
-    padding: 22px;
-    background: linear-gradient(135deg, #1db954, #00ffcc);
+    margin-top: 24px;
+    padding: 26px;
+    background: linear-gradient(135deg, #d4af37, #f5e6c8);
     color: black;
-    border-radius: 16px;
+    border-radius: 18px;
     font-weight: bold;
-    font-size: 24px;
+    font-size: 28px;
     text-decoration: none;
+    border: none;
+    box-shadow: 0 10px 30px rgba(212,175,55,0.5);
 }
 
+/* INPUT */
 input {
     width: 96%;
-    padding: 20px;
-    margin: 14px 0;
-    border-radius: 14px;
+    padding: 24px;
+    margin: 16px 0;
+    border-radius: 16px;
     border: none;
-    font-size: 22px;
+    font-size: 26px;
+    background: #111;
+    color: #f5e6c8;
 }
 
+/* VIDEO */
 .video-box iframe {
     width: 100%;
     aspect-ratio: 16/9;
-    border-radius: 18px;
+    border-radius: 20px;
 }
 
-.glow {
-    text-shadow: 0 0 18px #1db954;
-}
-
+/* BADGE */
 .badge {
-    font-size: 20px;
-    color: #00ffcc;
+    font-size: 24px;
+    color: #d4af37;
+}
+
+/* MOBILE BOOST */
+@media (max-width: 480px) {
+    body { font-size: 32px; }
+    h1 { font-size: 70px; }
+    h2 { font-size: 50px; }
+    a, button { font-size: 30px; padding: 28px; }
 }
 </style>
 """
@@ -170,7 +193,7 @@ def films():
         <div class="card">
             <h2>{f[1]}</h2>
             <p class="badge">Official Selection – Cinebration International Film Festival 2026</p>
-            <p>{count}/{MAX_TICKETS} tickets</p>
+            <p>{count}/{MAX_TICKETS} tickets sold</p>
             {button}
         </div>
         """
@@ -201,7 +224,7 @@ def claim(film_id):
     """
 
 # -------------------------
-# SUBMIT (WITH LOADING FIX)
+# SUBMIT
 # -------------------------
 @app.route("/submit/<int:film_id>", methods=["POST"])
 def submit(film_id):
@@ -233,7 +256,7 @@ def submit(film_id):
     <div class="container">
 
     <div class="card">
-        <h2>🎟 Processing Ticket...</h2>
+        <h2>🎟 Ticket Created</h2>
         <p>Please wait...</p>
     </div>
 
@@ -306,7 +329,7 @@ def watch(ticket_id):
         <html><head>{BASE_STYLE}</head><body>
         <div class="container">
 
-        <h2 class="glow">⏳ PREMIERE LOCKED</h2>
+        <h2 class="glow">⏳ Premiere Starts Soon</h2>
 
         <div class="card">
             <p>Welcome {ticket[1]}</p>
@@ -343,10 +366,17 @@ def admin():
     cursor.execute("SELECT * FROM tickets ORDER BY id DESC")
     users = cursor.fetchall()
 
-    html = "<h2>🎟 XineRent Admin Panel</h2><hr>"
+    html = "<h2>🎟 Admin Panel</h2><hr>"
 
     for u in users:
-        html += f"<p>{u}</p><hr>"
+        html += f"""
+        <div class="card">
+            <p><b>ID:</b> {u[0]}</p>
+            <p><b>Name:</b> {u[1]}</p>
+            <p><b>Email:</b> {u[2]}</p>
+            <p><b>Film:</b> {u[3]}</p>
+        </div>
+        """
 
     return html
 
