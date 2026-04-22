@@ -54,9 +54,10 @@ if cursor.fetchone()[0] == 0:
 # SETTINGS
 # -------------------------
 MAX_TICKETS = 700
+ADMIN_PASSWORD = "Muha&123"
 
 # -------------------------
-# CINEMATIC BIG UI
+# CINEMATIC UI
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -81,13 +82,10 @@ body {
     padding: 28px;
     margin: 22px auto;
     max-width: 95%;
-    box-shadow: 0 0 25px rgba(0,0,0,0.8);
 }
 
 h1 { font-size: 40px; }
 h2 { font-size: 32px; }
-h3 { font-size: 26px; }
-p  { font-size: 20px; }
 
 a, button {
     display: block;
@@ -119,17 +117,6 @@ input {
 .glow {
     text-shadow: 0 0 12px #1db954;
 }
-
-html {
-    -webkit-text-size-adjust: 100%;
-}
-
-@media (max-width: 480px) {
-    body { font-size: 24px; }
-    h1 { font-size: 44px; }
-    h2 { font-size: 36px; }
-    a, button { font-size: 24px; padding: 22px; }
-}
 </style>
 """
 
@@ -143,11 +130,11 @@ def home():
     <div class="container">
 
     <h1 class="glow">🎬 XineRent</h1>
-    <p>Digital Box Office System</p>
 
     <div class="card">
         <a href="/films">🎟 Get Ticket</a>
         <a href="/enter">🎬 Enter Premiere</a>
+        <a href="/admin">🔐 Admin Panel</a>
     </div>
 
     </div></body></html>
@@ -175,7 +162,7 @@ def films():
         html += f"""
         <div class="card">
             <h2>{f[1]}</h2>
-            <p>{count}/{MAX_TICKETS} tickets sold</p>
+            <p>{count}/{MAX_TICKETS} tickets</p>
             {button}
         </div>
         """
@@ -248,7 +235,7 @@ def submit(film_id):
     """
 
 # -------------------------
-# ENTER (LOGIN)
+# ENTER
 # -------------------------
 @app.route("/enter", methods=["GET", "POST"])
 def enter():
@@ -280,7 +267,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (REAL TIMER)
+# WATCH
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -327,6 +314,55 @@ def watch(ticket_id):
 
     </div></body></html>
     """
+
+# -------------------------
+# 🔐 ADMIN PANEL (PASSWORD PROTECTED)
+# -------------------------
+@app.route("/admin", methods=["GET", "POST"])
+def admin():
+
+    pass_input = request.args.get("pass") or request.form.get("pass")
+
+    if pass_input != ADMIN_PASSWORD:
+        return f"""
+        <html>
+        <body style="background:#000; color:white; text-align:center; font-family:Arial; padding-top:100px;">
+            <h2>🔐 Admin Locked</h2>
+
+            <form method="GET">
+                <input name="pass" placeholder="Enter Password"
+                style="padding:15px; font-size:18px; width:80%; border-radius:10px;">
+                <br><br>
+                <button style="padding:15px; font-size:18px; background:#1db954; border:none; border-radius:10px;">
+                    Unlock
+                </button>
+            </form>
+        </body>
+        </html>
+        """
+
+    cursor.execute("SELECT * FROM tickets ORDER BY id DESC")
+    users = cursor.fetchall()
+
+    html = """
+    <h2>🎟 XineRent Admin Panel</h2>
+    <p>All Tickets</p>
+    <hr>
+    """
+
+    for u in users:
+        html += f"""
+        <div style="margin:10px; padding:10px; border:1px solid #333;">
+            <b>ID:</b> {u[0]}<br>
+            <b>Name:</b> {u[1]}<br>
+            <b>Email:</b> {u[2]}<br>
+            <b>Film ID:</b> {u[3]}<br>
+            <b>Time:</b> {u[4]}
+        </div>
+        <hr>
+        """
+
+    return html
 
 # -------------------------
 # RUN
