@@ -9,55 +9,67 @@ import psycopg2
 app = Flask(__name__)
 
 # -------------------------
-# DATABASE (POSTGRES - RENDER)
+# DATABASE (POSTGRES - SAFE CONNECTION)
 # -------------------------
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-conn = psycopg2.connect(DATABASE_URL)
-conn.autocommit = True
-cursor = conn.cursor()
+if not DATABASE_URL:
+    raise Exception("DATABASE_URL is not set")
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS tickets (
-    id SERIAL PRIMARY KEY,
-    name TEXT,
-    email TEXT,
-    film_id INTEGER,
-    created_at BIGINT
-)
-""")
+def get_cursor():
+    conn = psycopg2.connect(DATABASE_URL)
+    conn.autocommit = True
+    return conn.cursor()
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS films (
-    id SERIAL PRIMARY KEY,
-    title TEXT,
-    youtube_link TEXT,
-    release_time BIGINT
-)
-""")
+# -------------------------
+# INIT DATABASE
+# -------------------------
+def init_db():
+    cursor = get_cursor()
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS viewers (
-    ticket_id INTEGER PRIMARY KEY,
-    last_seen BIGINT
-)
-""")
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS tickets (
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        email TEXT,
+        film_id INTEGER,
+        created_at BIGINT
+    )
+    """)
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS logins (
-    id SERIAL PRIMARY KEY,
-    name TEXT,
-    email TEXT,
-    time BIGINT
-)
-""")
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS films (
+        id SERIAL PRIMARY KEY,
+        title TEXT,
+        youtube_link TEXT,
+        release_time BIGINT
+    )
+    """)
 
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS email_log (
-    ticket_id INTEGER PRIMARY KEY,
-    sent INTEGER
-)
-""")
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS viewers (
+        ticket_id INTEGER PRIMARY KEY,
+        last_seen BIGINT
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS logins (
+        id SERIAL PRIMARY KEY,
+        name TEXT,
+        email TEXT,
+        time BIGINT
+    )
+    """)
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS email_log (
+        ticket_id INTEGER PRIMARY KEY,
+        sent INTEGER
+    )
+    """)
+
+init_db()
 
 # -------------------------
 # TIME FORMAT FUNCTION
@@ -70,6 +82,7 @@ def format_time(ts):
 # -------------------------
 release_time = int(datetime.datetime(2026, 4, 24, 19, 0).timestamp())
 
+cursor = get_cursor()
 cursor.execute("SELECT COUNT(*) FROM films")
 if cursor.fetchone()[0] == 0:
     cursor.execute("""
@@ -125,12 +138,9 @@ body {
     overflow-x: hidden;
 }
 
-/* grain cinematic layer */
 body::before {
     content: "";
     position: fixed;
-    top: 0;
-    left: 0;
     width: 100%;
     height: 100%;
     background: url('https://www.transparenttextures.com/patterns/noise.png');
@@ -138,7 +148,6 @@ body::before {
     pointer-events: none;
 }
 
-/* watermark anti piracy */
 body::after {
     content: "XineRent • Protected Screening";
     position: fixed;
@@ -147,7 +156,6 @@ body::after {
     font-size: 18px;
     color: rgba(255,255,255,0.15);
     pointer-events: none;
-    z-index: 9999;
 }
 
 .container { padding: 70px 20px; }
@@ -162,19 +170,8 @@ body::after {
     box-shadow: 0 0 60px rgba(0,0,0,0.8);
 }
 
-.card:hover {
-    transform: scale(1.01);
-    transition: 0.3s ease;
-    box-shadow: 0 0 80px rgba(255,255,255,0.05);
-}
-
 h1 { font-size: 90px; }
 h2 { font-size: 65px; }
-p  { font-size: 34px; opacity: 0.9; }
-
-.glow {
-    text-shadow: 0 0 25px rgba(255,255,255,0.2);
-}
 
 a, button {
     display: block;
@@ -189,14 +186,12 @@ a, button {
     border: 1px solid rgba(255,255,255,0.1);
 }
 
-/* cinematic player */
 .video-box {
     position: relative;
     width: 100%;
     aspect-ratio: 16/9;
     border-radius: 18px;
     overflow: hidden;
-    box-shadow: 0 0 90px rgba(0,0,0,0.9);
 }
 
 .video-box iframe {
@@ -205,7 +200,6 @@ a, button {
     border: none;
 }
 
-/* fullscreen cinematic button */
 .fs-btn {
     margin-top: 20px;
     padding: 20px;
@@ -238,7 +232,7 @@ def home():
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <h1 class="glow">🎬 XineRent</h1>
+        <h1>🎬 XineRent</h1>
         <div class="card">
             <a href="/films">🎟 Get Ticket</a>
             <a href="/enter">🎬 Enter Premiere</a>
@@ -253,6 +247,7 @@ def home():
 # -------------------------
 @app.route("/films")
 def films():
+    cursor = get_cursor()
     cursor.execute("SELECT * FROM films")
     films = cursor.fetchall()
 
@@ -267,7 +262,6 @@ def films():
         html += f"""
         <div class="card">
             <h2>{f[1]}</h2>
-            <p class="glow">Official Selection – Cinebration International Film Festival 2026</p>
             <p>{count}/{MAX_TICKETS} tickets</p>
             {button}
         </div>
@@ -283,7 +277,6 @@ def claim(film_id):
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <h2 class="glow">🎟 Claim Ticket</h2>
         <div class="card">
             <form action="/submit/{film_id}" method="POST">
                 <input name="name" placeholder="Your Name" required>
@@ -300,6 +293,7 @@ def claim(film_id):
 # -------------------------
 @app.route("/submit/<int:film_id>", methods=["POST"])
 def submit(film_id):
+    cursor = get_cursor()
     name = request.form.get("name")
     email = request.form.get("email")
 
@@ -335,6 +329,7 @@ def submit(film_id):
 @app.route("/enter", methods=["GET", "POST"])
 def enter():
     if request.method == "POST":
+        cursor = get_cursor()
         email = request.form.get("email")
 
         cursor.execute("SELECT id FROM tickets WHERE email=%s", (email,))
@@ -347,7 +342,6 @@ def enter():
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <h2 class="glow">🎬 Enter Premiere</h2>
         <div class="card">
             <form method="POST">
                 <input name="email" placeholder="Enter email" required>
@@ -359,10 +353,11 @@ def enter():
     """
 
 # -------------------------
-# WATCH (CINEMATIC + ANTI PIRACY + NO TIMER)
+# WATCH
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
+    cursor = get_cursor()
 
     cursor.execute("SELECT * FROM tickets WHERE id=%s", (ticket_id,))
     ticket = cursor.fetchone()
@@ -385,18 +380,14 @@ def watch(ticket_id):
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <h2 class="glow">🎬 CINEMATIC SCREENING</h2>
         <div class="card">
             <p>Welcome {ticket[1]}</p>
-            <p class="glow">Fullscreen recommended for full cinema experience</p>
 
             <div class="video-box">
                 <iframe id="cineFrame" src="{film[2]}" allowfullscreen></iframe>
             </div>
 
-            <button class="fs-btn" onclick="goFull()">⛶ Enter Full Cinema Mode</button>
-
-            <p style="opacity:0.5; font-size:20px;">Unauthorized recording or redistribution is prohibited</p>
+            <button class="fs-btn" onclick="goFull()">⛶ Fullscreen</button>
         </div>
     </div>
     </body></html>
@@ -407,23 +398,12 @@ def watch(ticket_id):
 # -------------------------
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
-
     pass_input = request.args.get("pass") or request.form.get("pass")
 
     if pass_input != ADMIN_PASSWORD:
-        return f"""
-        <html><head>{BASE_STYLE}</head><body>
-        <div class="container">
-            <h2 class="glow">🔐 ADMIN LOGIN</h2>
-            <div class="card">
-                <form method="GET">
-                    <input name="pass" type="password" placeholder="Enter Password">
-                    <button type="submit">Unlock</button>
-                </form>
-            </div>
-        </div>
-        </body></html>
-        """
+        return "<h2>Login Required</h2>"
+
+    cursor = get_cursor()
 
     cursor.execute("""
     SELECT tickets.name, tickets.email
@@ -432,27 +412,12 @@ def admin():
     """)
     live_users = cursor.fetchall()
 
-    cursor.execute("SELECT * FROM logins ORDER BY id DESC")
-    logins = cursor.fetchall()
-
-    html = "<h1 class='glow'>🎟 ADMIN PANEL</h1>"
-    html += f"<h2>🟢 VIEWERS ({len(live_users)})</h2>"
+    html = "<h1>ADMIN PANEL</h1>"
 
     for v in live_users:
-        html += f"<div class='card'><p>{v[0]} ({v[1]})</p></div>"
+        html += f"<p>{v[0]} ({v[1]})</p>"
 
-    html += "<h2>👤 USERS</h2>"
-
-    for l in logins:
-        html += f"""
-        <div class="card">
-            <p><b>Name:</b> {l[1]}</p>
-            <p><b>Email:</b> {l[2]}</p>
-            <p><b>Joined:</b> {format_time(l[3])}</p>
-        </div>
-        """
-
-    return f"<html><head>{BASE_STYLE}</head><body><div class='container'>{html}</div></body></html>"
+    return html
 
 # -------------------------
 # RUN
