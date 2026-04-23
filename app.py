@@ -109,7 +109,7 @@ def send_email(to_email, subject, message):
         print("Email error:", e)
 
 # -------------------------
-# CINEMATIC UI UPGRADE (EDGE / GLOW / FILM FEEL)
+# CINEMATIC UI
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -124,7 +124,6 @@ body {
     font-size: 34px;
 }
 
-/* cinematic grain overlay */
 body::before {
     content: "";
     position: fixed;
@@ -148,15 +147,8 @@ body::before {
     margin: 35px auto;
     max-width: 98%;
     border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 0 40px rgba(0,0,0,0.7), inset 0 0 15px rgba(255,255,255,0.03);
+    box-shadow: 0 0 40px rgba(0,0,0,0.7);
     color: #ffffff !important;
-}
-
-/* cinematic glow edge */
-.card:hover {
-    box-shadow: 0 0 60px rgba(255,255,255,0.08), 0 0 120px rgba(0,0,0,0.9);
-    transform: scale(1.01);
-    transition: 0.3s ease;
 }
 
 .card p,
@@ -169,14 +161,13 @@ body::before {
     color: #ffffff !important;
 }
 
-h1 { font-size: 90px; letter-spacing: 2px; }
-h2 { font-size: 65px; letter-spacing: 1px; }
-p  { font-size: 34px; opacity: 0.9; }
+h1 { font-size: 90px; }
+h2 { font-size: 65px; }
+p  { font-size: 34px; }
 
 .glow {
     color: #ffffff;
-    text-shadow: 0 0 10px rgba(255,255,255,0.3),
-                 0 0 30px rgba(255,255,255,0.1);
+    text-shadow: 0 0 10px rgba(255,255,255,0.3);
 }
 
 a, button {
@@ -190,12 +181,6 @@ a, button {
     font-weight: bold;
     text-decoration: none;
     border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: 0 0 25px rgba(0,0,0,0.6);
-}
-
-a:hover, button:hover {
-    box-shadow: 0 0 40px rgba(255,255,255,0.15);
-    transform: scale(1.02);
 }
 
 input {
@@ -212,12 +197,6 @@ input {
     width: 100%;
     aspect-ratio: 16/9;
     border-radius: 18px;
-    box-shadow: 0 0 60px rgba(0,0,0,0.9);
-}
-
-.live {
-    color: #00ff88;
-    font-weight: bold;
 }
 </style>
 """
@@ -351,7 +330,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (NO TIMER - CINEMATIC ONLY)
+# WATCH (TIMER REMOVED)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -382,7 +361,6 @@ def watch(ticket_id):
             <div class="card">
                 <p>Welcome {ticket[1]}</p>
                 <p class="glow">Your premiere will begin soon...</p>
-                <p>Feel the cinematic world building up 🎥</p>
             </div>
         </div>
         </body></html>
