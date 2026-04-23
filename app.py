@@ -1,54 +1,51 @@
 from flask import Flask, request, redirect
+import sqlite3
 import time
 import os
 import datetime
 import smtplib
 from email.mime.text import MIMEText
-import psycopg2
 
 app = Flask(__name__)
 
 # -------------------------
-# DATABASE (POSTGRES - RENDER)
+# DATABASE
 # -------------------------
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-conn = psycopg2.connect(DATABASE_URL)
-conn.autocommit = True
+conn = sqlite3.connect("dbo.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS tickets (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
     email TEXT,
     film_id INTEGER,
-    created_at BIGINT
+    created_at INTEGER
 )
 """)
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS films (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT,
     youtube_link TEXT,
-    release_time BIGINT
+    release_time INTEGER
 )
 """)
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS viewers (
     ticket_id INTEGER PRIMARY KEY,
-    last_seen BIGINT
+    last_seen INTEGER
 )
 """)
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS logins (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
     email TEXT,
-    time BIGINT
+    time INTEGER
 )
 """)
 
@@ -58,6 +55,8 @@ CREATE TABLE IF NOT EXISTS email_log (
     sent INTEGER
 )
 """)
+
+conn.commit()
 
 # -------------------------
 # TIME FORMAT FUNCTION
@@ -74,12 +73,13 @@ cursor.execute("SELECT COUNT(*) FROM films")
 if cursor.fetchone()[0] == 0:
     cursor.execute("""
     INSERT INTO films (title, youtube_link, release_time)
-    VALUES (%s, %s, %s)
+    VALUES (?, ?, ?)
     """, (
         "XineRent Premiere Film",
         "https://www.youtube.com/embed/-AUw43bmMWQ",
         release_time
     ))
+    conn.commit()
 
 # -------------------------
 # SETTINGS
@@ -109,7 +109,7 @@ def send_email(to_email, subject, message):
         print("Email error:", e)
 
 # -------------------------
-# CINEMATIC UI
+# UI (CINEMATIC UPGRADE)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -117,38 +117,24 @@ BASE_STYLE = """
 
 body {
     margin: 0;
-    font-family: Arial, sans-serif;
-    background: radial-gradient(circle at top, #0a0a0a, #000000 60%);
+    font-family: Arial;
+    background: radial-gradient(circle at top, #050505, #000);
     color: #ffffff;
     text-align: center;
     font-size: 34px;
 }
 
-body::before {
-    content: "";
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: url('https://www.transparenttextures.com/patterns/noise.png');
-    opacity: 0.08;
-    pointer-events: none;
-}
-
-.container {
-    padding: 70px 20px;
-}
+.container { padding: 70px 20px; }
 
 .card {
-    background: linear-gradient(145deg, #0f0f0f, #070707);
+    background: #0f0f0f;
     border-radius: 28px;
     padding: 50px;
     margin: 35px auto;
     max-width: 98%;
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 0 40px rgba(0,0,0,0.7);
+    border: 1px solid rgba(212,175,55,0.3);
     color: #ffffff !important;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8);
 }
 
 .card p,
@@ -166,21 +152,35 @@ h2 { font-size: 65px; }
 p  { font-size: 34px; }
 
 .glow {
-    color: #ffffff;
-    text-shadow: 0 0 10px rgba(255,255,255,0.3);
+    color: #d4af37;
+    text-shadow: 0 0 25px #d4af37;
+}
+
+/* CINEMA VIDEO FRAME */
+.cinema-frame {
+    background: radial-gradient(circle, rgba(212,175,55,0.15), transparent);
+    padding: 25px;
+    border-radius: 30px;
+    box-shadow: 0 0 60px rgba(0,0,0,0.9), 0 0 25px rgba(212,175,55,0.2);
+}
+
+.video-box iframe {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: 18px;
+    border: 2px solid rgba(212,175,55,0.25);
 }
 
 a, button {
     display: block;
     margin-top: 30px;
     padding: 35px;
-    background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
-    color: white;
+    background: linear-gradient(135deg, #d4af37, #f5e6c8);
+    color: black;
     border-radius: 22px;
     font-size: 38px;
     font-weight: bold;
     text-decoration: none;
-    border: 1px solid rgba(255,255,255,0.1);
 }
 
 input {
@@ -193,10 +193,9 @@ input {
     border-radius: 15px;
 }
 
-.video-box iframe {
-    width: 100%;
-    aspect-ratio: 16/9;
-    border-radius: 18px;
+.live {
+    color: #00ff88;
+    font-weight: bold;
 }
 </style>
 """
@@ -230,7 +229,7 @@ def films():
     html = f"<html><head>{BASE_STYLE}</head><body><div class='container'>"
 
     for f in films:
-        cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (f[0],))
+        cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=?", (f[0],))
         count = cursor.fetchone()[0]
 
         button = "<p>❌ SOLD OUT</p>" if count >= MAX_TICKETS else f"<a href='/claim/{f[0]}'>🎟 Claim Ticket</a>"
@@ -274,29 +273,29 @@ def submit(film_id):
     name = request.form.get("name")
     email = request.form.get("email")
 
-    cursor.execute("INSERT INTO logins (name,email,time) VALUES (%s,%s,%s)",
+    cursor.execute("INSERT INTO logins (name,email,time) VALUES (?,?,?)",
                    (name, email, int(time.time())))
+    conn.commit()
 
-    cursor.execute("SELECT id FROM tickets WHERE email=%s AND film_id=%s", (email, film_id))
+    cursor.execute("SELECT id FROM tickets WHERE email=? AND film_id=?", (email, film_id))
     existing = cursor.fetchone()
 
     if existing:
         return redirect(f"/watch/{existing[0]}")
 
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
+    cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=?", (film_id,))
     count = cursor.fetchone()[0]
 
     if count >= MAX_TICKETS:
         return "<h2>❌ SOLD OUT</h2>"
 
     cursor.execute("""
-    INSERT INTO tickets (name,email,film_id,created_at)
-    VALUES (%s,%s,%s,%s)
+    INSERT INTO tickets (name, email, film_id, created_at)
+    VALUES (?, ?, ?, ?)
     """, (name, email, film_id, int(time.time())))
+    conn.commit()
 
-    cursor.execute("SELECT id FROM tickets WHERE email=%s AND film_id=%s ORDER BY id DESC LIMIT 1",
-                   (email, film_id))
-    ticket_id = cursor.fetchone()[0]
+    ticket_id = cursor.lastrowid
 
     return redirect(f"/watch/{ticket_id}")
 
@@ -308,7 +307,7 @@ def enter():
     if request.method == "POST":
         email = request.form.get("email")
 
-        cursor.execute("SELECT id FROM tickets WHERE email=%s", (email,))
+        cursor.execute("SELECT id FROM tickets WHERE email=?", (email,))
         ticket = cursor.fetchone()
 
         if ticket:
@@ -330,49 +329,39 @@ def enter():
     """
 
 # -------------------------
-# WATCH (TIMER REMOVED)
+# WATCH (CINEMATIC + TIMER REMOVED)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
 
-    cursor.execute("SELECT * FROM tickets WHERE id=%s", (ticket_id,))
+    cursor.execute("SELECT * FROM tickets WHERE id=?", (ticket_id,))
     ticket = cursor.fetchone()
 
     if not ticket:
         return "<h2>❌ Invalid Ticket</h2>"
 
-    cursor.execute("SELECT * FROM films WHERE id=%s", (ticket[3],))
+    cursor.execute("SELECT * FROM films WHERE id=?", (ticket[3],))
     film = cursor.fetchone()
 
     now = int(time.time())
 
-    cursor.execute("""
-    INSERT INTO viewers (ticket_id,last_seen)
-    VALUES (%s,%s)
-    ON CONFLICT (ticket_id)
-    DO UPDATE SET last_seen=%s
-    """, (ticket_id, now, now))
+    cursor.execute("INSERT OR REPLACE INTO viewers (ticket_id,last_seen) VALUES (?,?)", (ticket_id, now))
+    conn.commit()
 
-    if now < film[3]:
-        return f"""
-        <html><head>{BASE_STYLE}</head><body>
-        <div class="container">
-            <h2 class="glow">🎬 CINEMA EXPERIENCE</h2>
-            <div class="card">
-                <p>Welcome {ticket[1]}</p>
-                <p class="glow">Your premiere will begin soon...</p>
-            </div>
-        </div>
-        </body></html>
-        """
+    cursor.execute("DELETE FROM viewers WHERE last_seen < ?", (now - 60,))
+    conn.commit()
 
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
         <h2 class="glow">🎬 LIVE PREMIERE</h2>
-        <div class="card video-box">
-            <iframe src="{film[2]}" allowfullscreen></iframe>
+
+        <div class="cinema-frame">
+            <div class="card video-box">
+                <iframe src="{film[2]}" allowfullscreen></iframe>
+            </div>
         </div>
+
     </div>
     </body></html>
     """
@@ -406,7 +395,7 @@ def admin():
     SELECT tickets.name, tickets.email
     FROM viewers
     JOIN tickets ON tickets.id = viewers.ticket_id
-    WHERE viewers.last_seen > %s
+    WHERE viewers.last_seen > ?
     """, (cutoff,))
     live_users = cursor.fetchall()
 
