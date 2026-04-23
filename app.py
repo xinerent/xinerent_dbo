@@ -109,7 +109,7 @@ def send_email(to_email, subject, message):
         print("Email error:", e)
 
 # -------------------------
-# UI
+# CINEMATIC UI UPGRADE (EDGE / GLOW / FILM FEEL)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -117,23 +117,46 @@ BASE_STYLE = """
 
 body {
     margin: 0;
-    font-family: Arial;
-    background: radial-gradient(circle at top, #050505, #000);
+    font-family: Arial, sans-serif;
+    background: radial-gradient(circle at top, #0a0a0a, #000000 60%);
     color: #ffffff;
     text-align: center;
     font-size: 34px;
 }
 
-.container { padding: 70px 20px; }
+/* cinematic grain overlay */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: url('https://www.transparenttextures.com/patterns/noise.png');
+    opacity: 0.08;
+    pointer-events: none;
+}
+
+.container {
+    padding: 70px 20px;
+}
 
 .card {
-    background: #0f0f0f;
+    background: linear-gradient(145deg, #0f0f0f, #070707);
     border-radius: 28px;
     padding: 50px;
     margin: 35px auto;
     max-width: 98%;
-    border: 1px solid rgba(212,175,55,0.3);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 0 40px rgba(0,0,0,0.7), inset 0 0 15px rgba(255,255,255,0.03);
     color: #ffffff !important;
+}
+
+/* cinematic glow edge */
+.card:hover {
+    box-shadow: 0 0 60px rgba(255,255,255,0.08), 0 0 120px rgba(0,0,0,0.9);
+    transform: scale(1.01);
+    transition: 0.3s ease;
 }
 
 .card p,
@@ -146,32 +169,33 @@ body {
     color: #ffffff !important;
 }
 
-h1 { font-size: 90px; }
-h2 { font-size: 65px; }
-p  { font-size: 34px; }
+h1 { font-size: 90px; letter-spacing: 2px; }
+h2 { font-size: 65px; letter-spacing: 1px; }
+p  { font-size: 34px; opacity: 0.9; }
 
 .glow {
-    color: #d4af37;
-    text-shadow: 0 0 25px #d4af37;
-}
-
-.timer {
-    font-size: 110px;
-    color: white;
-    font-weight: bold;
-    text-shadow: 0 0 25px #fff;
+    color: #ffffff;
+    text-shadow: 0 0 10px rgba(255,255,255,0.3),
+                 0 0 30px rgba(255,255,255,0.1);
 }
 
 a, button {
     display: block;
     margin-top: 30px;
     padding: 35px;
-    background: linear-gradient(135deg, #d4af37, #f5e6c8);
-    color: black;
+    background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+    color: white;
     border-radius: 22px;
     font-size: 38px;
     font-weight: bold;
     text-decoration: none;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 0 25px rgba(0,0,0,0.6);
+}
+
+a:hover, button:hover {
+    box-shadow: 0 0 40px rgba(255,255,255,0.15);
+    transform: scale(1.02);
 }
 
 input {
@@ -187,7 +211,8 @@ input {
 .video-box iframe {
     width: 100%;
     aspect-ratio: 16/9;
-    border-radius: 20px;
+    border-radius: 18px;
+    box-shadow: 0 0 60px rgba(0,0,0,0.9);
 }
 
 .live {
@@ -290,8 +315,6 @@ def submit(film_id):
     VALUES (%s,%s,%s,%s)
     """, (name, email, film_id, int(time.time())))
 
-    ticket_id = cursor.fetchone() if False else None
-
     cursor.execute("SELECT id FROM tickets WHERE email=%s AND film_id=%s ORDER BY id DESC LIMIT 1",
                    (email, film_id))
     ticket_id = cursor.fetchone()[0]
@@ -328,7 +351,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH
+# WATCH (NO TIMER - CINEMATIC ONLY)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -344,19 +367,22 @@ def watch(ticket_id):
 
     now = int(time.time())
 
-    cursor.execute("INSERT INTO viewers (ticket_id,last_seen) VALUES (%s,%s)
-                    ON CONFLICT (ticket_id) DO UPDATE SET last_seen=%s",
-                   (ticket_id, now, now))
+    cursor.execute("""
+    INSERT INTO viewers (ticket_id,last_seen)
+    VALUES (%s,%s)
+    ON CONFLICT (ticket_id)
+    DO UPDATE SET last_seen=%s
+    """, (ticket_id, now, now))
 
     if now < film[3]:
-        remaining = film[3] - now
         return f"""
         <html><head>{BASE_STYLE}</head><body>
         <div class="container">
-            <h2 class="glow">⏳ PREMIERE LOCKED</h2>
+            <h2 class="glow">🎬 CINEMA EXPERIENCE</h2>
             <div class="card">
                 <p>Welcome {ticket[1]}</p>
-                <div class="timer">{remaining//3600}h {(remaining%3600)//60}m</div>
+                <p class="glow">Your premiere will begin soon...</p>
+                <p>Feel the cinematic world building up 🎥</p>
             </div>
         </div>
         </body></html>
@@ -419,7 +445,7 @@ def admin():
 
     for l in logins:
         html += f"""
-        <div class='card'>
+        <div class="card">
             <p><b>Name:</b> {l[1]}</p>
             <p><b>Email:</b> {l[2]}</p>
             <p><b>Joined:</b> {format_time(l[3])}</p>
