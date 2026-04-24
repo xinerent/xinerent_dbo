@@ -109,7 +109,7 @@ def send_email(to_email, subject, message):
         print("Email error:", e)
 
 # -------------------------
-# CINEMATIC + ANTI PIRACY UI
+# UI
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -117,117 +117,84 @@ BASE_STYLE = """
 
 body {
     margin: 0;
-    font-family: Arial, sans-serif;
+    font-family: Arial;
     background: radial-gradient(circle at top, #050505, #000);
-    color: #fff;
+    color: #ffffff;
     text-align: center;
     font-size: 34px;
-    overflow-x: hidden;
-}
-
-/* grain cinematic layer */
-body::before {
-    content: "";
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: url('https://www.transparenttextures.com/patterns/noise.png');
-    opacity: 0.07;
-    pointer-events: none;
-}
-
-/* watermark anti piracy */
-body::after {
-    content: "XineRent • Protected Screening";
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    font-size: 18px;
-    color: rgba(255,255,255,0.15);
-    pointer-events: none;
-    z-index: 9999;
 }
 
 .container { padding: 70px 20px; }
 
 .card {
-    background: linear-gradient(145deg, #0f0f0f, #070707);
+    background: #0f0f0f;
     border-radius: 28px;
     padding: 50px;
     margin: 35px auto;
     max-width: 98%;
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 0 60px rgba(0,0,0,0.8);
+    border: 1px solid rgba(212,175,55,0.3);
+    color: #ffffff !important;
 }
 
-.card:hover {
-    transform: scale(1.01);
-    transition: 0.3s ease;
-    box-shadow: 0 0 80px rgba(255,255,255,0.05);
+.card p,
+.card b,
+.card span,
+.card div,
+.card h1,
+.card h2,
+.card h3 {
+    color: #ffffff !important;
 }
 
 h1 { font-size: 90px; }
 h2 { font-size: 65px; }
-p  { font-size: 34px; opacity: 0.9; }
+p  { font-size: 34px; }
 
 .glow {
-    text-shadow: 0 0 25px rgba(255,255,255,0.2);
+    color: #d4af37;
+    text-shadow: 0 0 25px #d4af37;
+}
+
+.timer {
+    font-size: 110px;
+    color: white;
+    font-weight: bold;
+    text-shadow: 0 0 25px #fff;
 }
 
 a, button {
     display: block;
     margin-top: 30px;
     padding: 35px;
-    background: #1a1a1a;
-    color: white;
+    background: linear-gradient(135deg, #d4af37, #f5e6c8);
+    color: black;
     border-radius: 22px;
     font-size: 38px;
     font-weight: bold;
     text-decoration: none;
-    border: 1px solid rgba(255,255,255,0.1);
 }
 
-/* cinematic player */
-.video-box {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16/9;
-    border-radius: 18px;
-    overflow: hidden;
-    box-shadow: 0 0 90px rgba(0,0,0,0.9);
+input {
+    width: 95%;
+    padding: 30px;
+    font-size: 34px;
+    background: #111;
+    color: white;
+    border: 1px solid #333;
+    border-radius: 15px;
 }
 
 .video-box iframe {
     width: 100%;
-    height: 100%;
-    border: none;
+    aspect-ratio: 16/9;
+    border-radius: 20px;
 }
 
-/* fullscreen cinematic button */
-.fs-btn {
-    margin-top: 20px;
-    padding: 20px;
-    font-size: 28px;
-    background: black;
-    border: 1px solid white;
-    color: white;
+.live {
+    color: #00ff88;
+    font-weight: bold;
 }
 </style>
-
-<script>
-document.addEventListener("contextmenu", event => event.preventDefault());
-
-function goFull() {
-    let frame = document.getElementById("cineFrame");
-    if (frame.requestFullscreen) {
-        frame.requestFullscreen();
-    } else if (frame.webkitRequestFullscreen) {
-        frame.webkitRequestFullscreen();
-    }
-}
-</script>
 """
 
 # -------------------------
@@ -242,7 +209,7 @@ def home():
         <div class="card">
             <a href="/films">🎟 Get Ticket</a>
             <a href="/enter">🎬 Enter Premiere</a>
-            <a href="/admin">🔐 Admin</a>
+            <a href="/admin">🔐 Admin Panel</a>
         </div>
     </div>
     </body></html>
@@ -323,6 +290,8 @@ def submit(film_id):
     VALUES (%s,%s,%s,%s)
     """, (name, email, film_id, int(time.time())))
 
+    ticket_id = cursor.fetchone() if False else None
+
     cursor.execute("SELECT id FROM tickets WHERE email=%s AND film_id=%s ORDER BY id DESC LIMIT 1",
                    (email, film_id))
     ticket_id = cursor.fetchone()[0]
@@ -359,7 +328,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (CINEMATIC + ANTI PIRACY + NO TIMER)
+# WATCH
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -375,28 +344,30 @@ def watch(ticket_id):
 
     now = int(time.time())
 
-    cursor.execute("""
-    INSERT INTO viewers (ticket_id,last_seen)
-    VALUES (%s,%s)
-    ON CONFLICT (ticket_id)
-    DO UPDATE SET last_seen=%s
-    """, (ticket_id, now, now))
+    cursor.execute("INSERT INTO viewers (ticket_id,last_seen) VALUES (%s,%s)
+                    ON CONFLICT (ticket_id) DO UPDATE SET last_seen=%s",
+                   (ticket_id, now, now))
+
+    if now < film[3]:
+        remaining = film[3] - now
+        return f"""
+        <html><head>{BASE_STYLE}</head><body>
+        <div class="container">
+            <h2 class="glow">⏳ PREMIERE LOCKED</h2>
+            <div class="card">
+                <p>Welcome {ticket[1]}</p>
+                <div class="timer">{remaining//3600}h {(remaining%3600)//60}m</div>
+            </div>
+        </div>
+        </body></html>
+        """
 
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <h2 class="glow">🎬 CINEMATIC SCREENING</h2>
-        <div class="card">
-            <p>Welcome {ticket[1]}</p>
-            <p class="glow">Fullscreen recommended for full cinema experience</p>
-
-            <div class="video-box">
-                <iframe id="cineFrame" src="{film[2]}" allowfullscreen></iframe>
-            </div>
-
-            <button class="fs-btn" onclick="goFull()">⛶ Enter Full Cinema Mode</button>
-
-            <p style="opacity:0.5; font-size:20px;">Unauthorized recording or redistribution is prohibited</p>
+        <h2 class="glow">🎬 LIVE PREMIERE</h2>
+        <div class="card video-box">
+            <iframe src="{film[2]}" allowfullscreen></iframe>
         </div>
     </div>
     </body></html>
@@ -425,27 +396,30 @@ def admin():
         </body></html>
         """
 
+    cutoff = int(time.time()) - 60
+
     cursor.execute("""
     SELECT tickets.name, tickets.email
     FROM viewers
     JOIN tickets ON tickets.id = viewers.ticket_id
-    """)
+    WHERE viewers.last_seen > %s
+    """, (cutoff,))
     live_users = cursor.fetchall()
 
     cursor.execute("SELECT * FROM logins ORDER BY id DESC")
     logins = cursor.fetchall()
 
     html = "<h1 class='glow'>🎟 ADMIN PANEL</h1>"
-    html += f"<h2>🟢 VIEWERS ({len(live_users)})</h2>"
+    html += f"<h2>🟢 LIVE VIEWERS ({len(live_users)})</h2>"
 
     for v in live_users:
-        html += f"<div class='card'><p>{v[0]} ({v[1]})</p></div>"
+        html += f"<div class='card'><p class='live'>{v[0]} ({v[1]})</p></div>"
 
-    html += "<h2>👤 USERS</h2>"
+    html += "<h2>👤 USERS (JOIN HISTORY)</h2>"
 
     for l in logins:
         html += f"""
-        <div class="card">
+        <div class='card'>
             <p><b>Name:</b> {l[1]}</p>
             <p><b>Email:</b> {l[2]}</p>
             <p><b>Joined:</b> {format_time(l[3])}</p>
