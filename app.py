@@ -9,67 +9,55 @@ import psycopg2
 app = Flask(__name__)
 
 # -------------------------
-# DATABASE (POSTGRES - SAFE CONNECTION)
+# DATABASE (POSTGRES - RENDER)
 # -------------------------
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-if not DATABASE_URL:
-    raise Exception("DATABASE_URL is not set")
+conn = psycopg2.connect(DATABASE_URL)
+conn.autocommit = True
+cursor = conn.cursor()
 
-def get_cursor():
-    conn = psycopg2.connect(DATABASE_URL)
-    conn.autocommit = True
-    return conn.cursor()
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS tickets (
+    id SERIAL PRIMARY KEY,
+    name TEXT,
+    email TEXT,
+    film_id INTEGER,
+    created_at BIGINT
+)
+""")
 
-# -------------------------
-# INIT DATABASE
-# -------------------------
-def init_db():
-    cursor = get_cursor()
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS films (
+    id SERIAL PRIMARY KEY,
+    title TEXT,
+    youtube_link TEXT,
+    release_time BIGINT
+)
+""")
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS tickets (
-        id SERIAL PRIMARY KEY,
-        name TEXT,
-        email TEXT,
-        film_id INTEGER,
-        created_at BIGINT
-    )
-    """)
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS viewers (
+    ticket_id INTEGER PRIMARY KEY,
+    last_seen BIGINT
+)
+""")
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS films (
-        id SERIAL PRIMARY KEY,
-        title TEXT,
-        youtube_link TEXT,
-        release_time BIGINT
-    )
-    """)
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS logins (
+    id SERIAL PRIMARY KEY,
+    name TEXT,
+    email TEXT,
+    time BIGINT
+)
+""")
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS viewers (
-        ticket_id INTEGER PRIMARY KEY,
-        last_seen BIGINT
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS logins (
-        id SERIAL PRIMARY KEY,
-        name TEXT,
-        email TEXT,
-        time BIGINT
-    )
-    """)
-
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS email_log (
-        ticket_id INTEGER PRIMARY KEY,
-        sent INTEGER
-    )
-    """)
-
-init_db()
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS email_log (
+    ticket_id INTEGER PRIMARY KEY,
+    sent INTEGER
+)
+""")
 
 # -------------------------
 # TIME FORMAT FUNCTION
@@ -82,7 +70,6 @@ def format_time(ts):
 # -------------------------
 release_time = int(datetime.datetime(2026, 4, 24, 19, 0).timestamp())
 
-cursor = get_cursor()
 cursor.execute("SELECT COUNT(*) FROM films")
 if cursor.fetchone()[0] == 0:
     cursor.execute("""
@@ -122,7 +109,7 @@ def send_email(to_email, subject, message):
         print("Email error:", e)
 
 # -------------------------
-# CINEMATIC + ANTI PIRACY UI
+# CINEMATIC UI UPGRADE (EDGE / GLOW / FILM FEEL)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -131,34 +118,28 @@ BASE_STYLE = """
 body {
     margin: 0;
     font-family: Arial, sans-serif;
-    background: radial-gradient(circle at top, #050505, #000);
-    color: #fff;
+    background: radial-gradient(circle at top, #0a0a0a, #000000 60%);
+    color: #ffffff;
     text-align: center;
     font-size: 34px;
-    overflow-x: hidden;
 }
 
+/* cinematic grain overlay */
 body::before {
     content: "";
     position: fixed;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     background: url('https://www.transparenttextures.com/patterns/noise.png');
-    opacity: 0.07;
+    opacity: 0.08;
     pointer-events: none;
 }
 
-body::after {
-    content: "XineRent • Protected Screening";
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    font-size: 18px;
-    color: rgba(255,255,255,0.15);
-    pointer-events: none;
+.container {
+    padding: 70px 20px;
 }
-
-.container { padding: 70px 20px; }
 
 .card {
     background: linear-gradient(145deg, #0f0f0f, #070707);
@@ -167,61 +148,78 @@ body::after {
     margin: 35px auto;
     max-width: 98%;
     border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 0 60px rgba(0,0,0,0.8);
+    box-shadow: 0 0 40px rgba(0,0,0,0.7), inset 0 0 15px rgba(255,255,255,0.03);
+    color: #ffffff !important;
 }
 
-h1 { font-size: 90px; }
-h2 { font-size: 65px; }
+/* cinematic glow edge */
+.card:hover {
+    box-shadow: 0 0 60px rgba(255,255,255,0.08), 0 0 120px rgba(0,0,0,0.9);
+    transform: scale(1.01);
+    transition: 0.3s ease;
+}
+
+.card p,
+.card b,
+.card span,
+.card div,
+.card h1,
+.card h2,
+.card h3 {
+    color: #ffffff !important;
+}
+
+h1 { font-size: 90px; letter-spacing: 2px; }
+h2 { font-size: 65px; letter-spacing: 1px; }
+p  { font-size: 34px; opacity: 0.9; }
+
+.glow {
+    color: #ffffff;
+    text-shadow: 0 0 10px rgba(255,255,255,0.3),
+                 0 0 30px rgba(255,255,255,0.1);
+}
 
 a, button {
     display: block;
     margin-top: 30px;
     padding: 35px;
-    background: #1a1a1a;
+    background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
     color: white;
     border-radius: 22px;
     font-size: 38px;
     font-weight: bold;
     text-decoration: none;
     border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 0 25px rgba(0,0,0,0.6);
 }
 
-.video-box {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16/9;
-    border-radius: 18px;
-    overflow: hidden;
+a:hover, button:hover {
+    box-shadow: 0 0 40px rgba(255,255,255,0.15);
+    transform: scale(1.02);
+}
+
+input {
+    width: 95%;
+    padding: 30px;
+    font-size: 34px;
+    background: #111;
+    color: white;
+    border: 1px solid #333;
+    border-radius: 15px;
 }
 
 .video-box iframe {
     width: 100%;
-    height: 100%;
-    border: none;
+    aspect-ratio: 16/9;
+    border-radius: 18px;
+    box-shadow: 0 0 60px rgba(0,0,0,0.9);
 }
 
-.fs-btn {
-    margin-top: 20px;
-    padding: 20px;
-    font-size: 28px;
-    background: black;
-    border: 1px solid white;
-    color: white;
+.live {
+    color: #00ff88;
+    font-weight: bold;
 }
 </style>
-
-<script>
-document.addEventListener("contextmenu", event => event.preventDefault());
-
-function goFull() {
-    let frame = document.getElementById("cineFrame");
-    if (frame.requestFullscreen) {
-        frame.requestFullscreen();
-    } else if (frame.webkitRequestFullscreen) {
-        frame.webkitRequestFullscreen();
-    }
-}
-</script>
 """
 
 # -------------------------
@@ -232,11 +230,11 @@ def home():
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <h1>🎬 XineRent</h1>
+        <h1 class="glow">🎬 XineRent</h1>
         <div class="card">
             <a href="/films">🎟 Get Ticket</a>
             <a href="/enter">🎬 Enter Premiere</a>
-            <a href="/admin">🔐 Admin</a>
+            <a href="/admin">🔐 Admin Panel</a>
         </div>
     </div>
     </body></html>
@@ -247,7 +245,6 @@ def home():
 # -------------------------
 @app.route("/films")
 def films():
-    cursor = get_cursor()
     cursor.execute("SELECT * FROM films")
     films = cursor.fetchall()
 
@@ -262,6 +259,7 @@ def films():
         html += f"""
         <div class="card">
             <h2>{f[1]}</h2>
+            <p class="glow">Official Selection – Cinebration International Film Festival 2026</p>
             <p>{count}/{MAX_TICKETS} tickets</p>
             {button}
         </div>
@@ -277,6 +275,7 @@ def claim(film_id):
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
+        <h2 class="glow">🎟 Claim Ticket</h2>
         <div class="card">
             <form action="/submit/{film_id}" method="POST">
                 <input name="name" placeholder="Your Name" required>
@@ -293,7 +292,6 @@ def claim(film_id):
 # -------------------------
 @app.route("/submit/<int:film_id>", methods=["POST"])
 def submit(film_id):
-    cursor = get_cursor()
     name = request.form.get("name")
     email = request.form.get("email")
 
@@ -329,7 +327,6 @@ def submit(film_id):
 @app.route("/enter", methods=["GET", "POST"])
 def enter():
     if request.method == "POST":
-        cursor = get_cursor()
         email = request.form.get("email")
 
         cursor.execute("SELECT id FROM tickets WHERE email=%s", (email,))
@@ -342,6 +339,7 @@ def enter():
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
+        <h2 class="glow">🎬 Enter Premiere</h2>
         <div class="card">
             <form method="POST">
                 <input name="email" placeholder="Enter email" required>
@@ -353,11 +351,10 @@ def enter():
     """
 
 # -------------------------
-# WATCH
+# WATCH (NO TIMER - CINEMATIC ONLY)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
-    cursor = get_cursor()
 
     cursor.execute("SELECT * FROM tickets WHERE id=%s", (ticket_id,))
     ticket = cursor.fetchone()
@@ -377,17 +374,26 @@ def watch(ticket_id):
     DO UPDATE SET last_seen=%s
     """, (ticket_id, now, now))
 
+    if now < film[3]:
+        return f"""
+        <html><head>{BASE_STYLE}</head><body>
+        <div class="container">
+            <h2 class="glow">🎬 CINEMA EXPERIENCE</h2>
+            <div class="card">
+                <p>Welcome {ticket[1]}</p>
+                <p class="glow">Your premiere will begin soon...</p>
+                <p>Feel the cinematic world building up 🎥</p>
+            </div>
+        </div>
+        </body></html>
+        """
+
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <div class="card">
-            <p>Welcome {ticket[1]}</p>
-
-            <div class="video-box">
-                <iframe id="cineFrame" src="{film[2]}" allowfullscreen></iframe>
-            </div>
-
-            <button class="fs-btn" onclick="goFull()">⛶ Fullscreen</button>
+        <h2 class="glow">🎬 LIVE PREMIERE</h2>
+        <div class="card video-box">
+            <iframe src="{film[2]}" allowfullscreen></iframe>
         </div>
     </div>
     </body></html>
@@ -398,26 +404,55 @@ def watch(ticket_id):
 # -------------------------
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
+
     pass_input = request.args.get("pass") or request.form.get("pass")
 
     if pass_input != ADMIN_PASSWORD:
-        return "<h2>Login Required</h2>"
+        return f"""
+        <html><head>{BASE_STYLE}</head><body>
+        <div class="container">
+            <h2 class="glow">🔐 ADMIN LOGIN</h2>
+            <div class="card">
+                <form method="GET">
+                    <input name="pass" type="password" placeholder="Enter Password">
+                    <button type="submit">Unlock</button>
+                </form>
+            </div>
+        </div>
+        </body></html>
+        """
 
-    cursor = get_cursor()
+    cutoff = int(time.time()) - 60
 
     cursor.execute("""
     SELECT tickets.name, tickets.email
     FROM viewers
     JOIN tickets ON tickets.id = viewers.ticket_id
-    """)
+    WHERE viewers.last_seen > %s
+    """, (cutoff,))
     live_users = cursor.fetchall()
 
-    html = "<h1>ADMIN PANEL</h1>"
+    cursor.execute("SELECT * FROM logins ORDER BY id DESC")
+    logins = cursor.fetchall()
+
+    html = "<h1 class='glow'>🎟 ADMIN PANEL</h1>"
+    html += f"<h2>🟢 LIVE VIEWERS ({len(live_users)})</h2>"
 
     for v in live_users:
-        html += f"<p>{v[0]} ({v[1]})</p>"
+        html += f"<div class='card'><p class='live'>{v[0]} ({v[1]})</p></div>"
 
-    return html
+    html += "<h2>👤 USERS (JOIN HISTORY)</h2>"
+
+    for l in logins:
+        html += f"""
+        <div class="card">
+            <p><b>Name:</b> {l[1]}</p>
+            <p><b>Email:</b> {l[2]}</p>
+            <p><b>Joined:</b> {format_time(l[3])}</p>
+        </div>
+        """
+
+    return f"<html><head>{BASE_STYLE}</head><body><div class='container'>{html}</div></body></html>"
 
 # -------------------------
 # RUN
