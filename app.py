@@ -77,7 +77,7 @@ if cursor.fetchone()[0] == 0:
     VALUES (%s, %s, %s)
     """, (
         "XineRent Premiere Film",
-        "https://www.youtube.com/embed/-AUw43bmMWQ",
+        "https://www.youtube.com/embed/-AUw43bmMWQ?autoplay=1&mute=0",
         release_time
     ))
 
@@ -109,7 +109,7 @@ def send_email(to_email, subject, message):
         print("Email error:", e)
 
 # -------------------------
-# CINEMATIC UI UPGRADE (EDGE / GLOW / FILM FEEL)
+# GOLD CINEMATIC UI
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -117,23 +117,32 @@ BASE_STYLE = """
 
 body {
     margin: 0;
-    font-family: Arial, sans-serif;
-    background: radial-gradient(circle at top, #0a0a0a, #000000 60%);
-    color: #ffffff;
+    font-family: 'Georgia', serif;
+    background: radial-gradient(circle at top, #1a1200, #000000 70%);
+    color: #f5e6c8;
     text-align: center;
     font-size: 34px;
 }
 
-/* cinematic grain overlay */
+/* film grain */
 body::before {
     content: "";
     position: fixed;
-    top: 0;
-    left: 0;
     width: 100%;
     height: 100%;
     background: url('https://www.transparenttextures.com/patterns/noise.png');
     opacity: 0.08;
+    pointer-events: none;
+}
+
+/* gold watermark */
+body::after {
+    content: "XineRent Private Screening";
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    font-size: 16px;
+    color: rgba(212,175,55,0.25);
     pointer-events: none;
 }
 
@@ -142,60 +151,59 @@ body::before {
 }
 
 .card {
-    background: linear-gradient(145deg, #0f0f0f, #070707);
-    border-radius: 28px;
+    background: linear-gradient(145deg, #0f0c02, #1a1405);
+    border-radius: 30px;
     padding: 50px;
     margin: 35px auto;
     max-width: 98%;
-    border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 0 40px rgba(0,0,0,0.7), inset 0 0 15px rgba(255,255,255,0.03);
-    color: #ffffff !important;
+    border: 1px solid rgba(212,175,55,0.3);
+    box-shadow: 0 0 50px rgba(212,175,55,0.15), inset 0 0 20px rgba(212,175,55,0.05);
 }
 
-/* cinematic glow edge */
+/* glow edge */
 .card:hover {
-    box-shadow: 0 0 60px rgba(255,255,255,0.08), 0 0 120px rgba(0,0,0,0.9);
+    box-shadow: 0 0 80px rgba(212,175,55,0.3);
     transform: scale(1.01);
     transition: 0.3s ease;
 }
 
-.card p,
-.card b,
-.card span,
-.card div,
-.card h1,
-.card h2,
-.card h3 {
-    color: #ffffff !important;
+h1 {
+    font-size: 90px;
+    color: #d4af37;
+    text-shadow: 0 0 30px rgba(212,175,55,0.6);
 }
 
-h1 { font-size: 90px; letter-spacing: 2px; }
-h2 { font-size: 65px; letter-spacing: 1px; }
-p  { font-size: 34px; opacity: 0.9; }
+h2 {
+    font-size: 65px;
+    color: #f5e6c8;
+}
+
+p {
+    font-size: 34px;
+    opacity: 0.95;
+}
 
 .glow {
-    color: #ffffff;
-    text-shadow: 0 0 10px rgba(255,255,255,0.3),
-                 0 0 30px rgba(255,255,255,0.1);
+    color: #d4af37;
+    text-shadow: 0 0 15px rgba(212,175,55,0.6);
 }
 
 a, button {
     display: block;
     margin-top: 30px;
     padding: 35px;
-    background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
-    color: white;
+    background: linear-gradient(135deg, #d4af37, #f5e6c8);
+    color: black;
     border-radius: 22px;
-    font-size: 38px;
+    font-size: 34px;
     font-weight: bold;
     text-decoration: none;
-    border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: 0 0 25px rgba(0,0,0,0.6);
+    border: none;
 }
 
 a:hover, button:hover {
-    box-shadow: 0 0 40px rgba(255,255,255,0.15);
-    transform: scale(1.02);
+    transform: scale(1.03);
+    box-shadow: 0 0 30px rgba(212,175,55,0.5);
 }
 
 input {
@@ -203,23 +211,50 @@ input {
     padding: 30px;
     font-size: 34px;
     background: #111;
-    color: white;
-    border: 1px solid #333;
+    color: #f5e6c8;
+    border: 1px solid rgba(212,175,55,0.3);
     border-radius: 15px;
+}
+
+/* cinematic player */
+.video-box {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 0 120px rgba(212,175,55,0.3);
 }
 
 .video-box iframe {
     width: 100%;
-    aspect-ratio: 16/9;
-    border-radius: 18px;
-    box-shadow: 0 0 60px rgba(0,0,0,0.9);
+    height: 100%;
+    border: none;
 }
 
-.live {
-    color: #00ff88;
-    font-weight: bold;
+/* fullscreen button */
+.fs-btn {
+    margin-top: 25px;
+    padding: 20px;
+    font-size: 26px;
+    background: black;
+    border: 1px solid #d4af37;
+    color: #d4af37;
 }
 </style>
+
+<script>
+document.addEventListener("contextmenu", event => event.preventDefault());
+
+function goFull() {
+    let frame = document.getElementById("cineFrame");
+    if (frame.requestFullscreen) {
+        frame.requestFullscreen();
+    } else if (frame.webkitRequestFullscreen) {
+        frame.webkitRequestFullscreen();
+    }
+}
+</script>
 """
 
 # -------------------------
@@ -230,11 +265,11 @@ def home():
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <h1 class="glow">🎬 XineRent</h1>
+        <h1>XineRent</h1>
         <div class="card">
-            <a href="/films">🎟 Get Ticket</a>
-            <a href="/enter">🎬 Enter Premiere</a>
-            <a href="/admin">🔐 Admin Panel</a>
+            <a href="/films">Access Premiere</a>
+            <a href="/enter">Enter Screening</a>
+            <a href="/admin">Admin Panel</a>
         </div>
     </div>
     </body></html>
@@ -254,13 +289,13 @@ def films():
         cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (f[0],))
         count = cursor.fetchone()[0]
 
-        button = "<p>❌ SOLD OUT</p>" if count >= MAX_TICKETS else f"<a href='/claim/{f[0]}'>🎟 Claim Ticket</a>"
+        button = "<p>Sold Out</p>" if count >= MAX_TICKETS else f"<a href='/claim/{f[0]}'>Reserve Access</a>"
 
         html += f"""
         <div class="card">
             <h2>{f[1]}</h2>
-            <p class="glow">Official Selection – Cinebration International Film Festival 2026</p>
-            <p>{count}/{MAX_TICKETS} tickets</p>
+            <p class="glow">Digital Premiere Experience</p>
+            <p>{count}/{MAX_TICKETS}</p>
             {button}
         </div>
         """
@@ -275,12 +310,11 @@ def claim(film_id):
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <h2 class="glow">🎟 Claim Ticket</h2>
         <div class="card">
             <form action="/submit/{film_id}" method="POST">
                 <input name="name" placeholder="Your Name" required>
                 <input name="email" placeholder="Email" required>
-                <button type="submit">Get Ticket</button>
+                <button type="submit">Secure Access</button>
             </form>
         </div>
     </div>
@@ -304,16 +338,8 @@ def submit(film_id):
     if existing:
         return redirect(f"/watch/{existing[0]}")
 
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
-    count = cursor.fetchone()[0]
-
-    if count >= MAX_TICKETS:
-        return "<h2>❌ SOLD OUT</h2>"
-
-    cursor.execute("""
-    INSERT INTO tickets (name,email,film_id,created_at)
-    VALUES (%s,%s,%s,%s)
-    """, (name, email, film_id, int(time.time())))
+    cursor.execute("INSERT INTO tickets (name,email,film_id,created_at) VALUES (%s,%s,%s,%s)",
+                   (name, email, film_id, int(time.time())))
 
     cursor.execute("SELECT id FROM tickets WHERE email=%s AND film_id=%s ORDER BY id DESC LIMIT 1",
                    (email, film_id))
@@ -322,45 +348,13 @@ def submit(film_id):
     return redirect(f"/watch/{ticket_id}")
 
 # -------------------------
-# ENTER
-# -------------------------
-@app.route("/enter", methods=["GET", "POST"])
-def enter():
-    if request.method == "POST":
-        email = request.form.get("email")
-
-        cursor.execute("SELECT id FROM tickets WHERE email=%s", (email,))
-        ticket = cursor.fetchone()
-
-        if ticket:
-            return redirect(f"/watch/{ticket[0]}")
-        return "<h2>❌ No ticket found</h2>"
-
-    return f"""
-    <html><head>{BASE_STYLE}</head><body>
-    <div class="container">
-        <h2 class="glow">🎬 Enter Premiere</h2>
-        <div class="card">
-            <form method="POST">
-                <input name="email" placeholder="Enter email" required>
-                <button type="submit">Enter</button>
-            </form>
-        </div>
-    </div>
-    </body></html>
-    """
-
-# -------------------------
-# WATCH (NO TIMER - CINEMATIC ONLY)
+# WATCH (INSTANT PLAY)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
 
     cursor.execute("SELECT * FROM tickets WHERE id=%s", (ticket_id,))
     ticket = cursor.fetchone()
-
-    if not ticket:
-        return "<h2>❌ Invalid Ticket</h2>"
 
     cursor.execute("SELECT * FROM films WHERE id=%s", (ticket[3],))
     film = cursor.fetchone()
@@ -374,26 +368,14 @@ def watch(ticket_id):
     DO UPDATE SET last_seen=%s
     """, (ticket_id, now, now))
 
-    if now < film[3]:
-        return f"""
-        <html><head>{BASE_STYLE}</head><body>
-        <div class="container">
-            <h2 class="glow">🎬 CINEMA EXPERIENCE</h2>
-            <div class="card">
-                <p>Welcome {ticket[1]}</p>
-                <p class="glow">Your premiere will begin soon...</p>
-                <p>Feel the cinematic world building up 🎥</p>
-            </div>
-        </div>
-        </body></html>
-        """
-
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <h2 class="glow">🎬 LIVE PREMIERE</h2>
-        <div class="card video-box">
-            <iframe src="{film[2]}" allowfullscreen></iframe>
+        <div class="card">
+            <div class="video-box">
+                <iframe id="cineFrame" src="{film[2]}" allow="autoplay; fullscreen"></iframe>
+            </div>
+            <button class="fs-btn" onclick="goFull()">Enter Full Cinema</button>
         </div>
     </div>
     </body></html>
@@ -408,51 +390,17 @@ def admin():
     pass_input = request.args.get("pass") or request.form.get("pass")
 
     if pass_input != ADMIN_PASSWORD:
-        return f"""
-        <html><head>{BASE_STYLE}</head><body>
-        <div class="container">
-            <h2 class="glow">🔐 ADMIN LOGIN</h2>
-            <div class="card">
-                <form method="GET">
-                    <input name="pass" type="password" placeholder="Enter Password">
-                    <button type="submit">Unlock</button>
-                </form>
-            </div>
-        </div>
-        </body></html>
-        """
+        return "<h2>Login Required</h2>"
 
-    cutoff = int(time.time()) - 60
+    cursor.execute("SELECT name,email FROM tickets")
+    users = cursor.fetchall()
 
-    cursor.execute("""
-    SELECT tickets.name, tickets.email
-    FROM viewers
-    JOIN tickets ON tickets.id = viewers.ticket_id
-    WHERE viewers.last_seen > %s
-    """, (cutoff,))
-    live_users = cursor.fetchall()
+    html = "<h1>Admin Panel</h1>"
 
-    cursor.execute("SELECT * FROM logins ORDER BY id DESC")
-    logins = cursor.fetchall()
+    for u in users:
+        html += f"<p>{u[0]} - {u[1]}</p>"
 
-    html = "<h1 class='glow'>🎟 ADMIN PANEL</h1>"
-    html += f"<h2>🟢 LIVE VIEWERS ({len(live_users)})</h2>"
-
-    for v in live_users:
-        html += f"<div class='card'><p class='live'>{v[0]} ({v[1]})</p></div>"
-
-    html += "<h2>👤 USERS (JOIN HISTORY)</h2>"
-
-    for l in logins:
-        html += f"""
-        <div class="card">
-            <p><b>Name:</b> {l[1]}</p>
-            <p><b>Email:</b> {l[2]}</p>
-            <p><b>Joined:</b> {format_time(l[3])}</p>
-        </div>
-        """
-
-    return f"<html><head>{BASE_STYLE}</head><body><div class='container'>{html}</div></body></html>"
+    return html
 
 # -------------------------
 # RUN
