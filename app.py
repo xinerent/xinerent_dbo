@@ -109,7 +109,7 @@ def send_email(to_email, subject, message):
         print("Email error:", e)
 
 # -------------------------
-# CINEMATIC + ANTI PIRACY UI
+# CINEMATIC UI UPGRADE (EDGE / GLOW / FILM FEEL)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -118,14 +118,13 @@ BASE_STYLE = """
 body {
     margin: 0;
     font-family: Arial, sans-serif;
-    background: radial-gradient(circle at top, #050505, #000);
-    color: #fff;
+    background: radial-gradient(circle at top, #0a0a0a, #000000 60%);
+    color: #ffffff;
     text-align: center;
     font-size: 34px;
-    overflow-x: hidden;
 }
 
-/* grain cinematic layer */
+/* cinematic grain overlay */
 body::before {
     content: "";
     position: fixed;
@@ -134,23 +133,13 @@ body::before {
     width: 100%;
     height: 100%;
     background: url('https://www.transparenttextures.com/patterns/noise.png');
-    opacity: 0.07;
+    opacity: 0.08;
     pointer-events: none;
 }
 
-/* watermark anti piracy */
-body::after {
-    content: "XineRent • Protected Screening";
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    font-size: 18px;
-    color: rgba(255,255,255,0.15);
-    pointer-events: none;
-    z-index: 9999;
+.container {
+    padding: 70px 20px;
 }
-
-.container { padding: 70px 20px; }
 
 .card {
     background: linear-gradient(145deg, #0f0f0f, #070707);
@@ -159,75 +148,78 @@ body::after {
     margin: 35px auto;
     max-width: 98%;
     border: 1px solid rgba(255,255,255,0.08);
-    box-shadow: 0 0 60px rgba(0,0,0,0.8);
+    box-shadow: 0 0 40px rgba(0,0,0,0.7), inset 0 0 15px rgba(255,255,255,0.03);
+    color: #ffffff !important;
 }
 
+/* cinematic glow edge */
 .card:hover {
+    box-shadow: 0 0 60px rgba(255,255,255,0.08), 0 0 120px rgba(0,0,0,0.9);
     transform: scale(1.01);
     transition: 0.3s ease;
-    box-shadow: 0 0 80px rgba(255,255,255,0.05);
 }
 
-h1 { font-size: 90px; }
-h2 { font-size: 65px; }
+.card p,
+.card b,
+.card span,
+.card div,
+.card h1,
+.card h2,
+.card h3 {
+    color: #ffffff !important;
+}
+
+h1 { font-size: 90px; letter-spacing: 2px; }
+h2 { font-size: 65px; letter-spacing: 1px; }
 p  { font-size: 34px; opacity: 0.9; }
 
 .glow {
-    text-shadow: 0 0 25px rgba(255,255,255,0.2);
+    color: #ffffff;
+    text-shadow: 0 0 10px rgba(255,255,255,0.3),
+                 0 0 30px rgba(255,255,255,0.1);
 }
 
 a, button {
     display: block;
     margin-top: 30px;
     padding: 35px;
-    background: #1a1a1a;
+    background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
     color: white;
     border-radius: 22px;
     font-size: 38px;
     font-weight: bold;
     text-decoration: none;
     border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 0 25px rgba(0,0,0,0.6);
 }
 
-/* cinematic player */
-.video-box {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16/9;
-    border-radius: 18px;
-    overflow: hidden;
-    box-shadow: 0 0 90px rgba(0,0,0,0.9);
+a:hover, button:hover {
+    box-shadow: 0 0 40px rgba(255,255,255,0.15);
+    transform: scale(1.02);
+}
+
+input {
+    width: 95%;
+    padding: 30px;
+    font-size: 34px;
+    background: #111;
+    color: white;
+    border: 1px solid #333;
+    border-radius: 15px;
 }
 
 .video-box iframe {
     width: 100%;
-    height: 100%;
-    border: none;
+    aspect-ratio: 16/9;
+    border-radius: 18px;
+    box-shadow: 0 0 60px rgba(0,0,0,0.9);
 }
 
-/* fullscreen cinematic button */
-.fs-btn {
-    margin-top: 20px;
-    padding: 20px;
-    font-size: 28px;
-    background: black;
-    border: 1px solid white;
-    color: white;
+.live {
+    color: #00ff88;
+    font-weight: bold;
 }
 </style>
-
-<script>
-document.addEventListener("contextmenu", event => event.preventDefault());
-
-function goFull() {
-    let frame = document.getElementById("cineFrame");
-    if (frame.requestFullscreen) {
-        frame.requestFullscreen();
-    } else if (frame.webkitRequestFullscreen) {
-        frame.webkitRequestFullscreen();
-    }
-}
-</script>
 """
 
 # -------------------------
@@ -242,7 +234,7 @@ def home():
         <div class="card">
             <a href="/films">🎟 Get Ticket</a>
             <a href="/enter">🎬 Enter Premiere</a>
-            <a href="/admin">🔐 Admin</a>
+            <a href="/admin">🔐 Admin Panel</a>
         </div>
     </div>
     </body></html>
@@ -359,7 +351,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (CINEMATIC + ANTI PIRACY + NO TIMER)
+# WATCH (NO TIMER - CINEMATIC ONLY)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -382,21 +374,26 @@ def watch(ticket_id):
     DO UPDATE SET last_seen=%s
     """, (ticket_id, now, now))
 
+    if now < film[3]:
+        return f"""
+        <html><head>{BASE_STYLE}</head><body>
+        <div class="container">
+            <h2 class="glow">🎬 CINEMA EXPERIENCE</h2>
+            <div class="card">
+                <p>Welcome {ticket[1]}</p>
+                <p class="glow">Your premiere will begin soon...</p>
+                <p>Feel the cinematic world building up 🎥</p>
+            </div>
+        </div>
+        </body></html>
+        """
+
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <h2 class="glow">🎬 CINEMATIC SCREENING</h2>
-        <div class="card">
-            <p>Welcome {ticket[1]}</p>
-            <p class="glow">Fullscreen recommended for full cinema experience</p>
-
-            <div class="video-box">
-                <iframe id="cineFrame" src="{film[2]}" allowfullscreen></iframe>
-            </div>
-
-            <button class="fs-btn" onclick="goFull()">⛶ Enter Full Cinema Mode</button>
-
-            <p style="opacity:0.5; font-size:20px;">Unauthorized recording or redistribution is prohibited</p>
+        <h2 class="glow">🎬 LIVE PREMIERE</h2>
+        <div class="card video-box">
+            <iframe src="{film[2]}" allowfullscreen></iframe>
         </div>
     </div>
     </body></html>
@@ -425,23 +422,26 @@ def admin():
         </body></html>
         """
 
+    cutoff = int(time.time()) - 60
+
     cursor.execute("""
     SELECT tickets.name, tickets.email
     FROM viewers
     JOIN tickets ON tickets.id = viewers.ticket_id
-    """)
+    WHERE viewers.last_seen > %s
+    """, (cutoff,))
     live_users = cursor.fetchall()
 
     cursor.execute("SELECT * FROM logins ORDER BY id DESC")
     logins = cursor.fetchall()
 
     html = "<h1 class='glow'>🎟 ADMIN PANEL</h1>"
-    html += f"<h2>🟢 VIEWERS ({len(live_users)})</h2>"
+    html += f"<h2>🟢 LIVE VIEWERS ({len(live_users)})</h2>"
 
     for v in live_users:
-        html += f"<div class='card'><p>{v[0]} ({v[1]})</p></div>"
+        html += f"<div class='card'><p class='live'>{v[0]} ({v[1]})</p></div>"
 
-    html += "<h2>👤 USERS</h2>"
+    html += "<h2>👤 USERS (JOIN HISTORY)</h2>"
 
     for l in logins:
         html += f"""
