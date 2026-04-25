@@ -7,13 +7,13 @@ import datetime
 app = Flask(__name__)
 
 # -------------------------
-# DB CONNECTION SAFE
+# DB CONNECTION
 # -------------------------
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 # -------------------------
-# INIT DATABASE
+# INIT DB
 # -------------------------
 def init_db():
     with get_conn() as conn:
@@ -61,6 +61,10 @@ init_db()
 # -------------------------
 MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
+
+# WAT OFFSET (Nigeria is UTC+1)
+WAT_OFFSET = 3600
+
 PREMIERE_TIME = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())
 
 # -------------------------
@@ -80,37 +84,88 @@ with get_conn() as conn:
             ))
 
 # -------------------------
-# STYLE
+# STYLE (CINEMATIC UPGRADE)
 # -------------------------
 BASE_STYLE = """
 <style>
-body{margin:0;background:#000;color:white;text-align:center;font-family:Arial;}
+body{
+    margin:0;
+    background:#000;
+    color:white;
+    font-family:Arial;
+    text-align:center;
+}
+
+/* BIG CINEMATIC TEXT */
+h1{font-size:120px;}
+h2{font-size:80px;}
+p{font-size:42px;}
+
 .container{padding:70px 20px;}
-.card{background:#0f0f0f;padding:50px;border-radius:25px;margin:25px auto;max-width:95%;}
-h1{font-size:90px;} h2{font-size:65px;} p{font-size:32px;}
-.glow{color:#d4af37;text-shadow:0 0 20px #d4af37;}
-iframe{width:100%;height:600px;border-radius:18px;}
+
+.card{
+    background:#0f0f0f;
+    padding:60px;
+    border-radius:25px;
+    margin:25px auto;
+    max-width:95%;
+    border:1px solid rgba(212,175,55,0.25);
+}
+
+/* GOLD FESTIVAL GLOW */
+.glow{
+    color:#d4af37;
+    text-shadow:0 0 25px #d4af37;
+}
+
+/* BUTTONS */
 a,button{
-    padding:30px;
-    font-size:32px;
+    padding:40px;
+    font-size:40px;
     background:#d4af37;
     color:black;
     border-radius:18px;
-    text-decoration:none;
-    border:none;
     display:block;
-    margin-top:20px;
+    margin-top:25px;
+    text-decoration:none;
 }
+
+/* INPUT */
 input{
-    padding:30px;
-    font-size:30px;
     width:95%;
+    padding:35px;
+    font-size:38px;
     background:#111;
     color:white;
     border-radius:15px;
 }
-.live{color:#00ff88;}
-.admin-box{background:black;padding:25px;border-radius:15px;text-align:left;}
+
+/* LIVE VIEWERS */
+.live{
+    color:#00ff88;
+    font-weight:bold;
+}
+
+/* VIDEO CINEMATIC MODE */
+iframe{
+    width:100%;
+    height:600px;
+    border-radius:20px;
+}
+
+/* FULLSCREEN CINEMA OVERLAY (fallback beauty) */
+.cinema-mode{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:black;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:9999;
+}
 </style>
 """
 
@@ -145,10 +200,24 @@ def films():
     html = f"<html><head>{BASE_STYLE}</head><body><div class='container'>"
 
     for f in films:
+        with get_conn() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (f[0],))
+                count = cursor.fetchone()[0]
+
+        remaining = MAX_TICKETS - count
+
         html += f"""
         <div class="card">
+
+            <p class="glow">🏆 Official Selection at Cinebration International Film Festival 2026</p>
+
             <h2>{f[1]}</h2>
-            <a href="/claim/{f[0]}">🎟 Claim Ticket</a>
+
+            <p>{count}/{MAX_TICKETS} tickets</p>
+            <p style="color:#00ff88;">Remaining: {remaining}</p>
+
+            <a href="/claim/{f[0]}">🎟 Get Ticket</a>
         </div>
         """
 
@@ -182,9 +251,6 @@ def submit(film_id):
     name = request.form.get("name")
     email = request.form.get("email")
 
-    if not name or not email:
-        return "Missing data"
-
     with get_conn() as conn:
         with conn.cursor() as cursor:
             cursor.execute("""
@@ -201,13 +267,13 @@ def submit(film_id):
 # -------------------------
 @app.route("/enter", methods=["GET","POST"])
 def enter():
-    if request.method == "POST":
-        email = request.form.get("email")
+    if request.method=="POST":
+        email=request.form.get("email")
 
         with get_conn() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT id FROM tickets WHERE email=%s",(email,))
-                t = cursor.fetchone()
+                t=cursor.fetchone()
 
         if t:
             return redirect(f"/watch/{t[0]}")
@@ -228,7 +294,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (FIXED + SAFE)
+# WATCH (CINEMATIC + SAFE + FULLSCREEN + TIMER LOCK)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -237,55 +303,40 @@ def watch(ticket_id):
         with conn.cursor() as cursor:
 
             cursor.execute("SELECT * FROM tickets WHERE id=%s",(ticket_id,))
-            t = cursor.fetchone()
+            t=cursor.fetchone()
+
             if not t:
-                return "Invalid Ticket"
+                return "<h2>Invalid Ticket</h2>"
 
             cursor.execute("SELECT * FROM films WHERE id=%s",(t[3],))
-            film = cursor.fetchone()
+            film=cursor.fetchone()
 
             video = film[2] if film else ""
 
-            now = int(time.time())
+    now=int(time.time())
 
-            cursor.execute("""
-            INSERT INTO viewers(ticket_id,last_seen)
-            VALUES(%s,%s)
-            ON CONFLICT(ticket_id)
-            DO UPDATE SET last_seen=%s
-            """,(ticket_id,now,now))
-
-            cursor.execute("""
-            SELECT COUNT(*) FROM viewers WHERE last_seen > %s
-            """,(now-60,))
-            live = cursor.fetchone()[0]
-
-    # BEFORE PREMIERE
     if now < PREMIERE_TIME:
         return f"""
         <html><head>{BASE_STYLE}</head><body>
         <div class="container">
-            <h2 class="glow">🎬 STARTS IN</h2>
-            <h1 id="countdown"></h1>
+            <h2 class="glow">🎬 PREMIERE LOCKED</h2>
+            <h1 id="cd"></h1>
         </div>
 
         <script>
         function tick(){{
             let t={PREMIERE_TIME};
-            let now=Math.floor(Date.now()/1000);
-            let d=t-now;
+            let n=Math.floor(Date.now()/1000);
+            let d=t-n;
 
-            if(d<=0){{
-                location.reload();
-                return;
-            }}
+            if(d<=0) location.reload();
 
             let dd=Math.floor(d/86400);
             let h=Math.floor((d%86400)/3600);
             let m=Math.floor((d%3600)/60);
             let s=d%60;
 
-            document.getElementById("countdown").innerText=
+            document.getElementById("cd").innerText =
             dd+"d "+h+"h "+m+"m "+s+"s";
         }}
         setInterval(tick,1000);
@@ -294,22 +345,30 @@ def watch(ticket_id):
         </body></html>
         """
 
-    # AFTER PREMIERE
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
+
         <h2 class="glow">🎬 LIVE PREMIERE</h2>
-        <p class="live">🔴 LIVE VIEWERS: {live}</p>
 
         <div class="card">
             <iframe id="vid" src="{video}" allowfullscreen></iframe>
         </div>
+
+        <p class="live">🔴 LIVE STREAM ACTIVE</p>
+
     </div>
 
     <script>
     window.onload=function(){{
         let v=document.getElementById("vid");
-        if(v.requestFullscreen) v.requestFullscreen();
+
+        // cinematic fullscreen attempt
+        setTimeout(()=>{
+            if(v.requestFullscreen){{
+                v.requestFullscreen();
+            }}
+        },1500);
     }}
     </script>
 
@@ -317,23 +376,23 @@ def watch(ticket_id):
     """
 
 # -------------------------
-# ADMIN
+# ADMIN (LIVE SIMPLE SAFE)
 # -------------------------
 @app.route("/admin", methods=["GET","POST"])
 def admin():
 
-    if request.method == "POST":
-        if request.form.get("pass") == ADMIN_PASSWORD:
+    if request.method=="POST":
+        if request.form.get("pass")==ADMIN_PASSWORD:
 
             with get_conn() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT name,email FROM tickets")
-                    users = cursor.fetchall()
+                    users=cursor.fetchall()
 
-            html = "<h1 class='glow'>ADMIN</h1><div class='admin-box'>"
+            html="<h1 class='glow'>ADMIN PANEL</h1><div class='card'>"
             for u in users:
-                html += f"<p>{u[0]} - {u[1]}</p>"
-            html += "</div>"
+                html+=f"<p>{u[0]} | {u[1]}</p>"
+            html+="</div>"
 
             return f"<html><head>{BASE_STYLE}</head><body>{html}</body></html>"
 
@@ -354,5 +413,5 @@ def admin():
 # -------------------------
 # RUN
 # -------------------------
-if __name__ == "__main__":
+if __name__=="__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT",5000)))
