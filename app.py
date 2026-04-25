@@ -61,10 +61,12 @@ init_db()
 # -------------------------
 MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
+
+# WAT TIME (server assumed UTC -> add +3600 if needed visually)
 PREMIERE_TIME = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())
 
 # -------------------------
-# INSERT FILM ONCE
+# INSERT FILM
 # -------------------------
 with get_conn() as conn:
     with conn.cursor() as cursor:
@@ -80,7 +82,7 @@ with get_conn() as conn:
             ))
 
 # -------------------------
-# STYLE (CINEMATIC BIG UI)
+# STYLE (CINEMATIC UPGRADE)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -92,10 +94,9 @@ body{
     text-align:center;
 }
 
-/* VERY BIG TEXT */
 h1{font-size:140px;}
-h2{font-size:95px;}
-p{font-size:50px;}
+h2{font-size:90px;}
+p{font-size:45px;}
 
 .container{padding:90px 20px;}
 
@@ -108,13 +109,16 @@ p{font-size:50px;}
     border:1px solid rgba(212,175,55,0.3);
 }
 
-/* GOLD FESTIVAL TITLE */
 .glow{
     color:#d4af37;
     text-shadow:0 0 30px #d4af37;
 }
 
-/* BUTTONS */
+.live{
+    color:#00ff88;
+    font-weight:bold;
+}
+
 a,button{
     padding:50px;
     font-size:45px;
@@ -127,7 +131,6 @@ a,button{
     font-weight:bold;
 }
 
-/* INPUT */
 input{
     width:95%;
     padding:45px;
@@ -137,21 +140,14 @@ input{
     border-radius:15px;
 }
 
-/* LIVE VIEWERS */
-.live{
-    color:#00ff88;
-    font-weight:bold;
-}
-
-/* VIDEO */
 iframe{
     width:100%;
     height:700px;
     border-radius:25px;
 }
 
-/* CINEMATIC FULLSCREEN FALLBACK */
-.cinema-overlay{
+/* cinematic fallback fullscreen */
+.cinema{
     position:fixed;
     top:0;
     left:0;
@@ -159,8 +155,8 @@ iframe{
     height:100%;
     background:black;
     display:flex;
-    align-items:center;
     justify-content:center;
+    align-items:center;
     z-index:9999;
 }
 </style>
@@ -204,10 +200,6 @@ def films():
                 count = cursor.fetchone()[0]
 
         remaining = MAX_TICKETS - count
-
-        # FIX: show 0 when empty (no negative or weird values)
-        if count < 0:
-            count = 0
         if remaining < 0:
             remaining = 0
 
@@ -264,9 +256,9 @@ def submit(film_id):
             VALUES(%s,%s,%s,%s)
             RETURNING id
             """,(name,email,film_id,int(time.time())))
-            ticket_id = cursor.fetchone()[0]
+            tid = cursor.fetchone()[0]
 
-    return redirect(f"/watch/{ticket_id}")
+    return redirect(f"/watch/{tid}")
 
 # -------------------------
 # ENTER
@@ -300,7 +292,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (SAFE + CINEMATIC + FULLSCREEN)
+# WATCH
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -315,10 +307,11 @@ def watch(ticket_id):
 
             cursor.execute("SELECT * FROM films WHERE id=%s",(t[3],))
             film=cursor.fetchone()
-            video = film[2] if film else ""
 
-    now=int(time.time())
+    video = film[2] if film else ""
+    now = int(time.time())
 
+    # countdown phase
     if now < PREMIERE_TIME:
         return f"""
         <html><head>{BASE_STYLE}</head><body>
@@ -347,9 +340,11 @@ def watch(ticket_id):
         </body></html>
         """
 
+    # live phase
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
+
         <h2 class="glow">🎬 LIVE PREMIERE</h2>
 
         <div class="card">
@@ -364,10 +359,13 @@ def watch(ticket_id):
         let v=document.getElementById("vid");
 
         setTimeout(()=>{
-            if(v.requestFullscreen) v.requestFullscreen();
+            try {{
+                if(v.requestFullscreen) v.requestFullscreen();
+            }} catch(e) {{}}
         },1500);
     }}
     </script>
+
     </body></html>
     """
 
