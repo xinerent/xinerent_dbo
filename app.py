@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect
+from flask import Flask, request, redirect, jsonify
 import psycopg2
 import time
 import os
@@ -9,15 +9,9 @@ from email.mime.text import MIMEText
 app = Flask(__name__)
 
 # -------------------------
-# POSTGRES CONNECTION (UPDATED ONLY PART)
+# POSTGRES CONNECTION
 # -------------------------
-conn = psycopg2.connect(
-    dbname="your_db_name",
-    user="your_db_user",
-    password="your_db_password",
-    host="your_db_host",
-    port="5432"
-)
+conn = psycopg2.connect(os.environ["DATABASE_URL"])
 cursor = conn.cursor()
 
 # -------------------------
@@ -79,7 +73,9 @@ def format_time(ts):
 release_time = int(datetime.datetime(2026, 4, 24, 19, 0).timestamp())
 
 cursor.execute("SELECT COUNT(*) FROM films")
-if cursor.fetchone()[0] == 0:
+row = cursor.fetchone()
+
+if not row or row[0] == 0:
     cursor.execute("""
     INSERT INTO films (title, youtube_link, release_time)
     VALUES (%s, %s, %s)
@@ -118,13 +114,14 @@ def send_email(to_email, subject, message):
         print("Email error:", e)
 
 # -------------------------
-# REAL-TIME API
+# REAL-TIME COUNTER API
 # -------------------------
 @app.route("/ticket-count/<int:film_id>")
 def ticket_count(film_id):
     cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
-    count = cursor.fetchone()[0]
-    return {"count": count}
+    result = cursor.fetchone()
+    count = result[0] if result else 0
+    return jsonify({"count": count})
 
 # -------------------------
 # UI
@@ -262,10 +259,8 @@ setInterval(() => {
 """
 
 # -------------------------
-# EVERYTHING BELOW (UNCHANGED LOGIC, ONLY SQL PARAMS FIXED)
+# HOME
 # -------------------------
-# I DID NOT REMOVE ANY ROUTE OR FEATURE — ONLY SQL STYLE CHANGED
-
 @app.route("/")
 def home():
     return f"""
@@ -281,6 +276,9 @@ def home():
     </body></html>
     """
 
+# -------------------------
+# FILMS
+# -------------------------
 @app.route("/films")
 def films():
     cursor.execute("SELECT * FROM films")
@@ -312,6 +310,9 @@ def films():
 
     return html + "</div></body></html>"
 
+# -------------------------
+# CLAIM
+# -------------------------
 @app.route("/claim/<int:film_id>")
 def claim(film_id):
     return f"""
@@ -329,6 +330,9 @@ def claim(film_id):
     </body></html>
     """
 
+# -------------------------
+# SUBMIT
+# -------------------------
 @app.route("/submit/<int:film_id>", methods=["POST"])
 def submit(film_id):
     name = request.form.get("name")
@@ -348,20 +352,90 @@ def submit(film_id):
     count = cursor.fetchone()[0]
 
     if count >= MAX_TICKETS:
-        return "<h2>SOLD OUT</h2>"
+        return "<h2>❌ SOLD OUT</h2>"
 
     cursor.execute("""
     INSERT INTO tickets (name,email,film_id,created_at)
     VALUES (%s,%s,%s,%s)
+    RETURNING id
     """, (name, email, film_id, int(time.time())))
+
+    ticket_id = cursor.fetchone()[0]
     conn.commit()
 
-    ticket_id = cursor.fetchone() if False else cursor.statusmessage
-
-    return redirect(f"/watch/{film_id}")
+    return redirect(f"/watch/{ticket_id}")
 
 # -------------------------
-# ADMIN (UNCHANGED LOGIC)
+# ENTER
+# -------------------------
+@app.route("/enter", methods=["GET", "POST"])
+def enter():
+    if request.method == "POST":
+        email = request.form.get("email")
+
+        cursor.execute("SELECT id FROM tickets WHERE email=%s", (email,))
+        ticket = cursor.fetchone()
+
+        if ticket:
+            return redirect(f"/watch/{ticket[0]}")
+        return "<h2>❌ No ticket found</h2>"
+
+    return f"""
+    <html><head>{BASE_STYLE}</head><body>
+    <div class="container">
+        <h2 class="glow">🎬 Enter Premiere</h2>
+        <div class="card">
+            <form method="POST">
+                <input name="email" required>
+                <button type="submit">Enter</button>
+            </form>
+        </div>
+    </div>
+    </body></html>
+    """
+
+# -------------------------
+# WATCH
+# -------------------------
+@app.route("/watch/<int:ticket_id>")
+def watch(ticket_id):
+
+    cursor.execute("SELECT * FROM tickets WHERE id=%s", (ticket_id,))
+    ticket = cursor.fetchone()
+
+    if not ticket:
+        return "<h2>❌ Invalid Ticket</h2>"
+
+    cursor.execute("SELECT * FROM films WHERE id=%s", (ticket[3],))
+    film = cursor.fetchone()
+
+    now = int(time.time())
+
+    cursor.execute("INSERT INTO viewers (ticket_id,last_seen) VALUES (%s,%s)
+                    ON CONFLICT (ticket_id) DO UPDATE SET last_seen=%s",
+                    (ticket_id, now, now))
+    conn.commit()
+
+    cursor.execute("DELETE FROM viewers WHERE last_seen < %s", (now - 60,))
+    conn.commit()
+
+    return f"""
+    <html><head>{BASE_STYLE}</head><body>
+    <div class="container">
+        <h2 class="glow">🎬 LIVE PREMIERE</h2>
+
+        <div class="cinema-frame">
+            <div class="card video-box">
+                <iframe src="{film[2]}" allowfullscreen></iframe>
+            </div>
+        </div>
+
+    </div>
+    </body></html>
+    """
+
+# -------------------------
+# ADMIN
 # -------------------------
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
@@ -396,7 +470,7 @@ def admin():
     cursor.execute("SELECT * FROM logins ORDER BY id DESC")
     logins = cursor.fetchall()
 
-    html = "<h1>ADMIN</h1>"
+    html = "<h1>ADMIN PANEL</h1>"
 
     for v in live_users:
         html += f"<div class='card'>{v[0]} {v[1]}</div>"
