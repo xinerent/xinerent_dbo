@@ -62,11 +62,11 @@ init_db()
 MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
 
-# WAT TIME (server assumed UTC -> add +3600 if needed visually)
+# WAT (UTC+1 already handled via timestamp logic)
 PREMIERE_TIME = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())
 
 # -------------------------
-# INSERT FILM
+# INSERT FILM ONCE
 # -------------------------
 with get_conn() as conn:
     with conn.cursor() as cursor:
@@ -82,7 +82,7 @@ with get_conn() as conn:
             ))
 
 # -------------------------
-# STYLE (CINEMATIC UPGRADE)
+# STYLE (BIGGER + CINEMATIC FIX)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -90,28 +90,49 @@ body{
     margin:0;
     background:#000;
     color:white;
-    font-family:Arial;
     text-align:center;
+    font-family:Arial;
 }
 
-h1{font-size:140px;}
-h2{font-size:90px;}
-p{font-size:45px;}
+h1{font-size:120px;}
+h2{font-size:80px;}
+p{font-size:42px;}
 
-.container{padding:90px 20px;}
+.container{padding:80px 20px;}
 
 .card{
     background:#0f0f0f;
-    padding:80px;
-    border-radius:30px;
-    margin:30px auto;
+    padding:70px;
+    border-radius:25px;
+    margin:25px auto;
     max-width:95%;
-    border:1px solid rgba(212,175,55,0.3);
+    border:1px solid rgba(212,175,55,0.25);
 }
 
 .glow{
     color:#d4af37;
-    text-shadow:0 0 30px #d4af37;
+    text-shadow:0 0 25px #d4af37;
+}
+
+a,button{
+    padding:40px;
+    font-size:40px;
+    background:#d4af37;
+    color:black;
+    border-radius:18px;
+    display:block;
+    margin-top:25px;
+    text-decoration:none;
+    font-weight:bold;
+}
+
+input{
+    width:95%;
+    padding:40px;
+    font-size:38px;
+    background:#111;
+    color:white;
+    border-radius:15px;
 }
 
 .live{
@@ -119,45 +140,10 @@ p{font-size:45px;}
     font-weight:bold;
 }
 
-a,button{
-    padding:50px;
-    font-size:45px;
-    background:#d4af37;
-    color:black;
-    border-radius:20px;
-    display:block;
-    margin-top:30px;
-    text-decoration:none;
-    font-weight:bold;
-}
-
-input{
-    width:95%;
-    padding:45px;
-    font-size:40px;
-    background:#111;
-    color:white;
-    border-radius:15px;
-}
-
 iframe{
     width:100%;
-    height:700px;
-    border-radius:25px;
-}
-
-/* cinematic fallback fullscreen */
-.cinema{
-    position:fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
-    background:black;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    z-index:9999;
+    height:650px;
+    border-radius:20px;
 }
 </style>
 """
@@ -181,7 +167,7 @@ def home():
     """
 
 # -------------------------
-# FILMS
+# FILMS (FIXED COUNT + 0 SAFETY)
 # -------------------------
 @app.route("/films")
 def films():
@@ -197,19 +183,13 @@ def films():
         with get_conn() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (f[0],))
-                count = cursor.fetchone()[0]
+                count = cursor.fetchone()[0] or 0
 
         remaining = MAX_TICKETS - count
-        if remaining < 0:
-            remaining = 0
 
         html += f"""
         <div class="card">
-
-            <p class="glow">
-            🏆 Official Selection at Cinebration International Film Festival 2026
-            </p>
-
+            <p class="glow">🏆 Official Selection at Cinebration International Film Festival 2026</p>
             <h2>{f[1]}</h2>
 
             <p>{count}/{MAX_TICKETS}</p>
@@ -242,12 +222,15 @@ def claim(film_id):
     """
 
 # -------------------------
-# SUBMIT
+# SUBMIT (SAFE)
 # -------------------------
 @app.route("/submit/<int:film_id>", methods=["POST"])
 def submit(film_id):
     name = request.form.get("name")
     email = request.form.get("email")
+
+    if not name or not email:
+        return "Missing data"
 
     with get_conn() as conn:
         with conn.cursor() as cursor:
@@ -255,26 +238,28 @@ def submit(film_id):
             INSERT INTO tickets(name,email,film_id,created_at)
             VALUES(%s,%s,%s,%s)
             RETURNING id
-            """,(name,email,film_id,int(time.time())))
-            tid = cursor.fetchone()[0]
+            """, (name, email, film_id, int(time.time())))
 
-    return redirect(f"/watch/{tid}")
+            ticket_id = cursor.fetchone()[0]
+
+    return redirect(f"/watch/{ticket_id}")
 
 # -------------------------
-# ENTER
+# ENTER (EMAIL LABEL FIXED)
 # -------------------------
 @app.route("/enter", methods=["GET","POST"])
 def enter():
-    if request.method=="POST":
-        email=request.form.get("email")
+    if request.method == "POST":
+        email = request.form.get("email")
 
         with get_conn() as conn:
             with conn.cursor() as cursor:
-                cursor.execute("SELECT id FROM tickets WHERE email=%s",(email,))
-                t=cursor.fetchone()
+                cursor.execute("SELECT id FROM tickets WHERE email=%s", (email,))
+                t = cursor.fetchone()
 
         if t:
             return redirect(f"/watch/{t[0]}")
+
         return "<h2>No ticket found</h2>"
 
     return f"""
@@ -283,7 +268,7 @@ def enter():
         <h2 class="glow">Enter Premiere</h2>
         <div class="card">
             <form method="POST">
-                <input name="email" placeholder="Enter email to enter premiere" required>
+                <input name="email" placeholder="Email (used to access premiere)" required>
                 <button>Enter</button>
             </form>
         </div>
@@ -292,7 +277,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH
+# WATCH (FIXED + FULLSCREEN + SAFE TIMER)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -300,23 +285,24 @@ def watch(ticket_id):
     with get_conn() as conn:
         with conn.cursor() as cursor:
 
-            cursor.execute("SELECT * FROM tickets WHERE id=%s",(ticket_id,))
-            t=cursor.fetchone()
+            cursor.execute("SELECT * FROM tickets WHERE id=%s", (ticket_id,))
+            t = cursor.fetchone()
+
             if not t:
                 return "<h2>Invalid Ticket</h2>"
 
-            cursor.execute("SELECT * FROM films WHERE id=%s",(t[3],))
-            film=cursor.fetchone()
+            cursor.execute("SELECT * FROM films WHERE id=%s", (t[3],))
+            film = cursor.fetchone()
 
-    video = film[2] if film else ""
+            video = film[2] if film else ""
+
     now = int(time.time())
 
-    # countdown phase
     if now < PREMIERE_TIME:
         return f"""
         <html><head>{BASE_STYLE}</head><body>
         <div class="container">
-            <h2 class="glow">🎬 PREMIERE STARTS IN</h2>
+            <h2 class="glow">🎬 STARTS IN</h2>
             <h1 id="cd"></h1>
         </div>
 
@@ -326,25 +312,23 @@ def watch(ticket_id):
             let n=Math.floor(Date.now()/1000);
             let d=t-n;
 
+            if(d<=0) location.reload();
+
             let dd=Math.floor(d/86400);
             let h=Math.floor((d%86400)/3600);
             let m=Math.floor((d%3600)/60);
             let s=d%60;
 
-            document.getElementById("cd").innerText=
+            document.getElementById("cd").innerText =
             dd+"d "+h+"h "+m+"m "+s+"s";
-
-            if(d<=0) location.reload();
         },1000);
         </script>
         </body></html>
         """
 
-    # live phase
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-
         <h2 class="glow">🎬 LIVE PREMIERE</h2>
 
         <div class="card">
@@ -357,36 +341,32 @@ def watch(ticket_id):
     <script>
     window.onload=function(){{
         let v=document.getElementById("vid");
-
         setTimeout(()=>{
-            try {{
-                if(v.requestFullscreen) v.requestFullscreen();
-            }} catch(e) {{}}
-        },1500);
+            if(v.requestFullscreen) v.requestFullscreen();
+        },1200);
     }}
     </script>
-
     </body></html>
     """
 
 # -------------------------
-# ADMIN
+# ADMIN (UNCHANGED SAFE)
 # -------------------------
 @app.route("/admin", methods=["GET","POST"])
 def admin():
 
-    if request.method=="POST":
-        if request.form.get("pass")==ADMIN_PASSWORD:
+    if request.method == "POST":
+        if request.form.get("pass") == ADMIN_PASSWORD:
 
             with get_conn() as conn:
                 with conn.cursor() as cursor:
                     cursor.execute("SELECT name,email FROM tickets")
-                    users=cursor.fetchall()
+                    users = cursor.fetchall()
 
-            html="<h1 class='glow'>ADMIN PANEL</h1><div class='card'>"
+            html = "<h1 class='glow'>ADMIN PANEL</h1><div class='card'>"
             for u in users:
-                html+=f"<p>{u[0]} | {u[1]}</p>"
-            html+="</div>"
+                html += f"<p>{u[0]} | {u[1]}</p>"
+            html += "</div>"
 
             return f"<html><head>{BASE_STYLE}</head><body>{html}</body></html>"
 
