@@ -93,7 +93,20 @@ def ticket_count(film_id):
     return jsonify({"count": count})
 
 # -------------------------
-# STYLE (BIG UI + FIXED ADMIN VISIBILITY)
+# LIVE VIEWERS API
+# -------------------------
+@app.route("/live-viewers/<int:film_id>")
+def live_viewers(film_id):
+    cursor.execute("""
+    SELECT COUNT(*) FROM viewers v
+    JOIN tickets t ON t.id = v.ticket_id
+    WHERE t.film_id = %s AND v.last_seen > %s
+    """, (film_id, int(time.time()) - 60))
+    count = cursor.fetchone()[0]
+    return jsonify({"count": count})
+
+# -------------------------
+# STYLE
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -105,7 +118,6 @@ body {
     text-align:center;
 }
 
-/* BIGGER UI */
 .container { padding: 80px 20px; }
 
 .card {
@@ -117,7 +129,6 @@ body {
     border:1px solid rgba(212,175,55,0.25);
 }
 
-/* TEXT SCALING */
 h1 { font-size:110px; }
 h2 { font-size:75px; }
 p  { font-size:40px; }
@@ -127,14 +138,12 @@ p  { font-size:40px; }
     text-shadow:0 0 25px #d4af37;
 }
 
-/* VIDEO FIX */
 iframe {
     width:100%;
     height:600px;
     border-radius:20px;
 }
 
-/* BUTTONS */
 a,button{
     display:block;
     margin-top:25px;
@@ -144,9 +153,10 @@ a,button{
     color:black;
     border-radius:20px;
     font-weight:bold;
+    text-decoration:none !important;
+    border:none;
 }
 
-/* INPUT */
 input{
     width:95%;
     padding:35px;
@@ -156,7 +166,6 @@ input{
     color:white;
 }
 
-/* LIVE ANIMATION */
 .live {
     color:#00ff88;
     animation: pulse 1s infinite;
@@ -168,7 +177,6 @@ input{
     100% {opacity:1;}
 }
 
-/* ADMIN FIX */
 .admin-box {
     background:black;
     color:white;
@@ -209,9 +217,23 @@ function refresh(filmId){
     });
 }
 
+function refreshLive(filmId){
+    fetch("/live-viewers/"+filmId)
+    .then(r=>r.json())
+    .then(d=>{
+        let el=document.getElementById("live-count");
+        if(el && parseInt(el.innerText)!==d.count){
+            animateCounter("live-count",d.count);
+        }
+    });
+}
+
 setInterval(()=>{
     if(window.FILM_IDS){
         window.FILM_IDS.forEach(id=>refresh(id));
+    }
+    if(window.FILM_ID){
+        refreshLive(window.FILM_ID);
     }
 },3000);
 </script>
@@ -237,101 +259,7 @@ def home():
     """
 
 # -------------------------
-# FILMS (FIXED IDS + COUNTER BUG)
-# -------------------------
-@app.route("/films")
-def films():
-    cursor.execute("SELECT * FROM films")
-    films = cursor.fetchall()
-
-    html = f"<html><head>{BASE_STYLE}</head><body><div class='container'>"
-
-    film_ids = []
-
-    for f in films:
-        film_ids.append(f[0])
-
-        cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (f[0],))
-        count = cursor.fetchone()[0]
-
-        html += f"""
-        <div class="card">
-            <h2>{f[1]}</h2>
-
-            <p>
-                <span id="count-{f[0]}">{count}</span> / {MAX_TICKETS}
-            </p>
-
-            <script>
-                window.FILM_IDS = {film_ids};
-            </script>
-        """
-
-        if count >= MAX_TICKETS:
-            html += "<p>❌ SOLD OUT</p>"
-        else:
-            html += f"<a href='/claim/{f[0]}'>🎟 Claim Ticket</a>"
-
-        html += "</div>"
-
-    return html + "</div></body></html>"
-
-# -------------------------
-# CLAIM
-# -------------------------
-@app.route("/claim/<int:film_id>")
-def claim(film_id):
-    return f"""
-    <html><head>{BASE_STYLE}</head>
-    <body>
-    <div class="container">
-        <h2 class="glow">🎟 Claim Ticket</h2>
-        <div class="card">
-            <form action="/submit/{film_id}" method="POST">
-                <input name="name" placeholder="Name" required>
-                <input name="email" placeholder="Email" required>
-                <button>Get Ticket</button>
-            </form>
-        </div>
-    </div>
-    </body></html>
-    """
-
-# -------------------------
-# SUBMIT
-# -------------------------
-@app.route("/submit/<int:film_id>", methods=["POST"])
-def submit(film_id):
-    name = request.form["name"]
-    email = request.form["email"]
-
-    cursor.execute("INSERT INTO logins(name,email,time) VALUES(%s,%s,%s)",
-                   (name,email,int(time.time())))
-    conn.commit()
-
-    cursor.execute("SELECT id FROM tickets WHERE email=%s AND film_id=%s", (email,film_id))
-    ex = cursor.fetchone()
-
-    if ex:
-        return redirect(f"/watch/{ex[0]}")
-
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
-    if cursor.fetchone()[0] >= MAX_TICKETS:
-        return "<h2>Sold Out</h2>"
-
-    cursor.execute("""
-        INSERT INTO tickets(name,email,film_id,created_at)
-        VALUES(%s,%s,%s,%s)
-        RETURNING id
-    """, (name,email,film_id,int(time.time())))
-
-    ticket_id = cursor.fetchone()[0]
-    conn.commit()
-
-    return redirect(f"/watch/{ticket_id}")
-
-# -------------------------
-# ENTER
+# ENTER (FIXED INPUT)
 # -------------------------
 @app.route("/enter", methods=["GET","POST"])
 def enter():
@@ -353,7 +281,7 @@ def enter():
         <h2 class="glow">Enter Premiere</h2>
         <div class="card">
             <form method="POST">
-                <input name="email">
+                <input name="email" placeholder="Enter your email" required>
                 <button>Enter</button>
             </form>
         </div>
@@ -362,7 +290,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (FIXED VIDEO CRASH)
+# WATCH (FULL UPGRADE)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -379,6 +307,7 @@ def watch(ticket_id):
     video = film[2] if film and film[2] else ""
 
     now=int(time.time())
+    premiere_time = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())
 
     cursor.execute("""
     INSERT INTO viewers(ticket_id,last_seen)
@@ -386,73 +315,69 @@ def watch(ticket_id):
     ON CONFLICT(ticket_id)
     DO UPDATE SET last_seen=EXCLUDED.last_seen
     """,(ticket_id,now))
-
     conn.commit()
 
-    return f"""
-    <html><head>{BASE_STYLE}</head>
-    <body>
-    <div class="container">
-        <h2 class="glow">🎬 LIVE PREMIERE</h2>
-        <div class="card">
-            <iframe src="{video}" allowfullscreen></iframe>
-        </div>
-    </div>
-    </body></html>
-    """
-
-# -------------------------
-# ADMIN (CLEAN + BLACK WHITE FIX)
-# -------------------------
-@app.route("/admin", methods=["GET","POST"])
-def admin():
-
-    p=request.form.get("pass") or request.args.get("pass")
-
-    if p!=ADMIN_PASSWORD:
+    # BEFORE PREMIERE
+    if now < premiere_time:
         return f"""
         <html><head>{BASE_STYLE}</head>
         <body>
         <div class="container">
-            <h2 class="glow">ADMIN LOGIN</h2>
+            <h2 class="glow">🎬 PREMIERE STARTS IN</h2>
             <div class="card">
-                <form method="POST">
-                    <input name="pass" type="password">
-                    <button>Unlock</button>
-                </form>
+                <h1 id="countdown"></h1>
             </div>
         </div>
+
+        <script>
+        function updateCountdown() {{
+            let target={premiere_time};
+            let now=Math.floor(Date.now()/1000);
+            let diff=target-now;
+
+            let d=Math.floor(diff/86400);
+            let h=Math.floor((diff%86400)/3600);
+            let m=Math.floor((diff%3600)/60);
+            let s=diff%60;
+
+            document.getElementById("countdown").innerText =
+            d+"d "+h+"h "+m+"m "+s+"s";
+        }}
+
+        setInterval(updateCountdown,1000);
+        updateCountdown();
+        </script>
         </body></html>
         """
 
-    cursor.execute("""
-    SELECT tickets.name,tickets.email
-    FROM viewers
-    JOIN tickets ON tickets.id=viewers.ticket_id
-    WHERE last_seen > %s
-    """,(int(time.time())-60,))
+    # AFTER PREMIERE
+    return f"""
+    <html><head>{BASE_STYLE}</head>
+    <body>
+    <div class="container">
 
-    live=cursor.fetchall()
+        <h2 class="glow">🎬 LIVE PREMIERE</h2>
 
-    cursor.execute("SELECT * FROM logins ORDER BY id DESC")
-    logs=cursor.fetchall()
+        <div class="live">🔴 LIVE VIEWERS: <span id="live-count">0</span></div>
 
-    html="<h1 class='glow'>ADMIN PANEL</h1>"
+        <div class="card">
+            <iframe id="videoFrame" src="{video}" allowfullscreen></iframe>
+        </div>
 
-    html+="<div class='admin-box'><h2>LIVE VIEWERS</h2>"
-    for l in live:
-        html+=f"<p class='live'>{l[0]} - {l[1]}</p>"
+    </div>
 
-    html+="<h2>USERS</h2>"
-    for x in logs:
-        html+=f"<p>{x[1]} | {x[2]}</p>"
+    <script>
+    window.FILM_ID = {t[3]};
 
-    html+="</div>"
+    function goFullScreen(){{
+        let iframe = document.getElementById("videoFrame");
+        if(iframe.requestFullscreen){{
+            iframe.requestFullscreen();
+        }}
+    }}
 
-    return f"<html><head>{BASE_STYLE}</head><body><div class='container'>{html}</div></body></html>"
+    setTimeout(goFullScreen,2000);
+    </script>
 
-# -------------------------
-# RUN
-# -------------------------
-if __name__=="__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT",5000)))
+    </body></html>
+    """
