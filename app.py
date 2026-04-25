@@ -395,7 +395,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH
+# WATCH (FIXED HERE ONLY)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -411,9 +411,13 @@ def watch(ticket_id):
 
     now = int(time.time())
 
-    cursor.execute("INSERT INTO viewers (ticket_id,last_seen) VALUES (%s,%s)
-                    ON CONFLICT (ticket_id) DO UPDATE SET last_seen=%s",
-                    (ticket_id, now, now))
+    cursor.execute("""
+    INSERT INTO viewers (ticket_id, last_seen)
+    VALUES (%s, %s)
+    ON CONFLICT (ticket_id)
+    DO UPDATE SET last_seen = %s
+    """, (ticket_id, now, now))
+
     conn.commit()
 
     cursor.execute("DELETE FROM viewers WHERE last_seen < %s", (now - 60,))
