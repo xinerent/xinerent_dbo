@@ -61,10 +61,6 @@ init_db()
 # -------------------------
 MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
-
-# WAT OFFSET (Nigeria is UTC+1)
-WAT_OFFSET = 3600
-
 PREMIERE_TIME = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())
 
 # -------------------------
@@ -84,7 +80,7 @@ with get_conn() as conn:
             ))
 
 # -------------------------
-# STYLE (CINEMATIC UPGRADE)
+# STYLE (CINEMATIC BIG UI)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -96,45 +92,46 @@ body{
     text-align:center;
 }
 
-/* BIG CINEMATIC TEXT */
-h1{font-size:120px;}
-h2{font-size:80px;}
-p{font-size:42px;}
+/* VERY BIG TEXT */
+h1{font-size:140px;}
+h2{font-size:95px;}
+p{font-size:50px;}
 
-.container{padding:70px 20px;}
+.container{padding:90px 20px;}
 
 .card{
     background:#0f0f0f;
-    padding:60px;
-    border-radius:25px;
-    margin:25px auto;
+    padding:80px;
+    border-radius:30px;
+    margin:30px auto;
     max-width:95%;
-    border:1px solid rgba(212,175,55,0.25);
+    border:1px solid rgba(212,175,55,0.3);
 }
 
-/* GOLD FESTIVAL GLOW */
+/* GOLD FESTIVAL TITLE */
 .glow{
     color:#d4af37;
-    text-shadow:0 0 25px #d4af37;
+    text-shadow:0 0 30px #d4af37;
 }
 
 /* BUTTONS */
 a,button{
-    padding:40px;
-    font-size:40px;
+    padding:50px;
+    font-size:45px;
     background:#d4af37;
     color:black;
-    border-radius:18px;
+    border-radius:20px;
     display:block;
-    margin-top:25px;
+    margin-top:30px;
     text-decoration:none;
+    font-weight:bold;
 }
 
 /* INPUT */
 input{
     width:95%;
-    padding:35px;
-    font-size:38px;
+    padding:45px;
+    font-size:40px;
     background:#111;
     color:white;
     border-radius:15px;
@@ -146,15 +143,15 @@ input{
     font-weight:bold;
 }
 
-/* VIDEO CINEMATIC MODE */
+/* VIDEO */
 iframe{
     width:100%;
-    height:600px;
-    border-radius:20px;
+    height:700px;
+    border-radius:25px;
 }
 
-/* FULLSCREEN CINEMA OVERLAY (fallback beauty) */
-.cinema-mode{
+/* CINEMATIC FULLSCREEN FALLBACK */
+.cinema-overlay{
     position:fixed;
     top:0;
     left:0;
@@ -200,6 +197,7 @@ def films():
     html = f"<html><head>{BASE_STYLE}</head><body><div class='container'>"
 
     for f in films:
+
         with get_conn() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (f[0],))
@@ -207,15 +205,23 @@ def films():
 
         remaining = MAX_TICKETS - count
 
+        # FIX: show 0 when empty (no negative or weird values)
+        if count < 0:
+            count = 0
+        if remaining < 0:
+            remaining = 0
+
         html += f"""
         <div class="card">
 
-            <p class="glow">🏆 Official Selection at Cinebration International Film Festival 2026</p>
+            <p class="glow">
+            🏆 Official Selection at Cinebration International Film Festival 2026
+            </p>
 
             <h2>{f[1]}</h2>
 
-            <p>{count}/{MAX_TICKETS} tickets</p>
-            <p style="color:#00ff88;">Remaining: {remaining}</p>
+            <p>{count}/{MAX_TICKETS}</p>
+            <p class="live">Remaining: {remaining}</p>
 
             <a href="/claim/{f[0]}">🎟 Get Ticket</a>
         </div>
@@ -285,7 +291,7 @@ def enter():
         <h2 class="glow">Enter Premiere</h2>
         <div class="card">
             <form method="POST">
-                <input name="email" placeholder="Enter email to access premiere" required>
+                <input name="email" placeholder="Enter email to enter premiere" required>
                 <button>Enter</button>
             </form>
         </div>
@@ -294,7 +300,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (CINEMATIC + SAFE + FULLSCREEN + TIMER LOCK)
+# WATCH (SAFE + CINEMATIC + FULLSCREEN)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -304,13 +310,11 @@ def watch(ticket_id):
 
             cursor.execute("SELECT * FROM tickets WHERE id=%s",(ticket_id,))
             t=cursor.fetchone()
-
             if not t:
                 return "<h2>Invalid Ticket</h2>"
 
             cursor.execute("SELECT * FROM films WHERE id=%s",(t[3],))
             film=cursor.fetchone()
-
             video = film[2] if film else ""
 
     now=int(time.time())
@@ -319,28 +323,26 @@ def watch(ticket_id):
         return f"""
         <html><head>{BASE_STYLE}</head><body>
         <div class="container">
-            <h2 class="glow">🎬 PREMIERE LOCKED</h2>
+            <h2 class="glow">🎬 PREMIERE STARTS IN</h2>
             <h1 id="cd"></h1>
         </div>
 
         <script>
-        function tick(){{
+        setInterval(()=>{
             let t={PREMIERE_TIME};
             let n=Math.floor(Date.now()/1000);
             let d=t-n;
-
-            if(d<=0) location.reload();
 
             let dd=Math.floor(d/86400);
             let h=Math.floor((d%86400)/3600);
             let m=Math.floor((d%3600)/60);
             let s=d%60;
 
-            document.getElementById("cd").innerText =
+            document.getElementById("cd").innerText=
             dd+"d "+h+"h "+m+"m "+s+"s";
-        }}
-        setInterval(tick,1000);
-        tick();
+
+            if(d<=0) location.reload();
+        },1000);
         </script>
         </body></html>
         """
@@ -348,7 +350,6 @@ def watch(ticket_id):
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-
         <h2 class="glow">🎬 LIVE PREMIERE</h2>
 
         <div class="card">
@@ -356,27 +357,22 @@ def watch(ticket_id):
         </div>
 
         <p class="live">🔴 LIVE STREAM ACTIVE</p>
-
     </div>
 
     <script>
     window.onload=function(){{
         let v=document.getElementById("vid");
 
-        // cinematic fullscreen attempt
         setTimeout(()=>{
-            if(v.requestFullscreen){{
-                v.requestFullscreen();
-            }}
+            if(v.requestFullscreen) v.requestFullscreen();
         },1500);
     }}
     </script>
-
     </body></html>
     """
 
 # -------------------------
-# ADMIN (LIVE SIMPLE SAFE)
+# ADMIN
 # -------------------------
 @app.route("/admin", methods=["GET","POST"])
 def admin():
