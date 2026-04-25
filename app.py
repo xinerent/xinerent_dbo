@@ -148,18 +148,7 @@ body {
     margin: 35px auto;
     max-width: 98%;
     border: 1px solid rgba(212,175,55,0.3);
-    color: #ffffff !important;
     box-shadow: 0 0 40px rgba(0,0,0,0.8);
-}
-
-.card p,
-.card b,
-.card span,
-.card div,
-.card h1,
-.card h2,
-.card h3 {
-    color: #ffffff !important;
 }
 
 h1 { font-size: 90px; }
@@ -172,17 +161,15 @@ p  { font-size: 34px; }
 }
 
 .cinema-frame {
-    background: radial-gradient(circle, rgba(212,175,55,0.15), transparent);
+    background: rgba(212,175,55,0.15);
     padding: 25px;
     border-radius: 30px;
-    box-shadow: 0 0 60px rgba(0,0,0,0.9), 0 0 25px rgba(212,175,55,0.2);
 }
 
 .video-box iframe {
     width: 100%;
     aspect-ratio: 16/9;
     border-radius: 18px;
-    border: 2px solid rgba(212,175,55,0.25);
 }
 
 a, button {
@@ -203,7 +190,6 @@ input {
     font-size: 34px;
     background: #111;
     color: white;
-    border: 1px solid #333;
     border-radius: 15px;
 }
 
@@ -222,8 +208,8 @@ function animateCounter(id, newValue) {
     let target = newValue;
 
     let step = (target - current) / 20;
-    let i = 0;
 
+    let i = 0;
     let interval = setInterval(() => {
         i++;
         current += step;
@@ -296,9 +282,7 @@ def films():
         <div class="card">
             <h2>{f[1]}</h2>
 
-            <p>
-                <span id="ticket-count">{count}</span>/{MAX_TICKETS} tickets
-            </p>
+            <p><span id="ticket-count">{count}</span>/{MAX_TICKETS}</p>
 
             <script>
                 window.FILM_ID = {f[0]};
@@ -395,7 +379,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (FIXED HERE ONLY)
+# WATCH (POSTGRES FIXED)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -412,11 +396,11 @@ def watch(ticket_id):
     now = int(time.time())
 
     cursor.execute("""
-    INSERT INTO viewers (ticket_id, last_seen)
-    VALUES (%s, %s)
+    INSERT INTO viewers (ticket_id,last_seen)
+    VALUES (%s,%s)
     ON CONFLICT (ticket_id)
-    DO UPDATE SET last_seen = %s
-    """, (ticket_id, now, now))
+    DO UPDATE SET last_seen = EXCLUDED.last_seen
+    """, (ticket_id, now))
 
     conn.commit()
 
@@ -439,7 +423,7 @@ def watch(ticket_id):
     """
 
 # -------------------------
-# ADMIN
+# ADMIN (FIXED DISPLAY ONLY)
 # -------------------------
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
@@ -474,12 +458,24 @@ def admin():
     cursor.execute("SELECT * FROM logins ORDER BY id DESC")
     logins = cursor.fetchall()
 
-    html = "<h1>ADMIN PANEL</h1>"
+    html = "<h1 class='glow'>🎟 ADMIN PANEL</h1>"
+    html += f"<h2>🟢 LIVE VIEWERS ({len(live_users)})</h2>"
 
     for v in live_users:
-        html += f"<div class='card'>{v[0]} {v[1]}</div>"
+        html += f"<div class='card'><p class='live'>{v[0]} ({v[1]})</p></div>"
 
-    return f"<html><head>{BASE_STYLE}</head><body>{html}</body></html>"
+    html += "<h2>👤 USERS (JOIN HISTORY)</h2>"
+
+    for l in logins:
+        html += f"""
+        <div class="card">
+            <p>Name: {l[1]}</p>
+            <p>Email: {l[2]}</p>
+            <p>Joined: {format_time(l[3])}</p>
+        </div>
+        """
+
+    return f"<html><head>{BASE_STYLE}</head><body><div class='container'>{html}</div></body></html>"
 
 # -------------------------
 # RUN
