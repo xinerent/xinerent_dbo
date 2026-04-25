@@ -62,13 +62,13 @@ CREATE TABLE IF NOT EXISTS email_log (
 conn.commit()
 
 # -------------------------
-# TIME FORMAT FUNCTION
+# TIME FORMAT
 # -------------------------
 def format_time(ts):
     return datetime.datetime.fromtimestamp(ts).strftime("%d %b %Y %I:%M %p")
 
 # -------------------------
-# PREMIERE TIME
+# PREMIERE
 # -------------------------
 release_time = int(datetime.datetime(2026, 4, 24, 19, 0).timestamp())
 
@@ -114,17 +114,16 @@ def send_email(to_email, subject, message):
         print("Email error:", e)
 
 # -------------------------
-# REAL-TIME COUNTER API
+# REAL TIME COUNT
 # -------------------------
 @app.route("/ticket-count/<int:film_id>")
 def ticket_count(film_id):
     cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
-    result = cursor.fetchone()
-    count = result[0] if result else 0
+    count = cursor.fetchone()[0]
     return jsonify({"count": count})
 
 # -------------------------
-# UI
+# UI UPGRADE (FULL PLATFORM DESIGN)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -133,64 +132,91 @@ BASE_STYLE = """
 body {
     margin: 0;
     font-family: Arial;
-    background: radial-gradient(circle at top, #050505, #000);
-    color: #ffffff;
+    background: #000;
+    color: #fff;
     text-align: center;
-    font-size: 34px;
 }
 
-.container { padding: 70px 20px; }
+/* GLOBAL LAYOUT */
+.container {
+    padding: 60px 20px;
+}
 
+/* CARDS */
 .card {
-    background: #0f0f0f;
-    border-radius: 28px;
-    padding: 50px;
-    margin: 35px auto;
-    max-width: 98%;
-    border: 1px solid rgba(212,175,55,0.3);
-    box-shadow: 0 0 40px rgba(0,0,0,0.8);
+    background: #0b0b0b;
+    border-radius: 24px;
+    padding: 40px;
+    margin: 25px auto;
+    max-width: 900px;
+    border: 1px solid rgba(212,175,55,0.25);
+    box-shadow: 0 0 25px rgba(0,0,0,0.8);
+    color: #fff;
+    overflow-wrap: break-word;
+    word-break: break-word;
 }
 
-h1 { font-size: 90px; }
-h2 { font-size: 65px; }
-p  { font-size: 34px; }
+/* TEXT */
+h1 { font-size: 70px; }
+h2 { font-size: 45px; }
+p  { font-size: 22px; }
 
 .glow {
     color: #d4af37;
-    text-shadow: 0 0 25px #d4af37;
+    text-shadow: 0 0 20px #d4af37;
 }
 
-.cinema-frame {
-    background: rgba(212,175,55,0.15);
+/* BUTTONS */
+a, button {
+    display: block;
+    margin-top: 20px;
     padding: 25px;
-    border-radius: 30px;
+    background: linear-gradient(135deg, #d4af37, #f5e6c8);
+    color: black;
+    border-radius: 16px;
+    font-size: 24px;
+    font-weight: bold;
+    text-decoration: none;
+    border: none;
+}
+
+/* INPUT */
+input {
+    width: 100%;
+    padding: 20px;
+    font-size: 20px;
+    margin-top: 10px;
+    background: #111;
+    color: white;
+    border-radius: 12px;
+    border: 1px solid #333;
+}
+
+/* CINEMA */
+.cinema-frame {
+    background: rgba(212,175,55,0.08);
+    padding: 20px;
+    border-radius: 20px;
 }
 
 .video-box iframe {
     width: 100%;
     aspect-ratio: 16/9;
-    border-radius: 18px;
+    border-radius: 16px;
 }
 
-a, button {
-    display: block;
-    margin-top: 30px;
-    padding: 35px;
-    background: linear-gradient(135deg, #d4af37, #f5e6c8);
-    color: black;
-    border-radius: 22px;
-    font-size: 38px;
-    font-weight: bold;
-    text-decoration: none;
+/* ADMIN DARK MODE FIX */
+.admin-card {
+    background: #000 !important;
+    color: #fff !important;
+    border: 1px solid #222;
 }
 
-input {
-    width: 95%;
-    padding: 30px;
-    font-size: 34px;
-    background: #111;
-    color: white;
-    border-radius: 15px;
+.admin-card p,
+.admin-card h1,
+.admin-card h2,
+.admin-card span {
+    color: #fff !important;
 }
 
 .live {
@@ -200,14 +226,12 @@ input {
 </style>
 
 <script>
-function animateCounter(id, newValue) {
+function animateCounter(id, value) {
     const el = document.getElementById(id);
     if (!el) return;
 
     let current = parseInt(el.innerText) || 0;
-    let target = newValue;
-
-    let step = (target - current) / 20;
+    let step = (value - current) / 15;
 
     let i = 0;
     let interval = setInterval(() => {
@@ -215,32 +239,30 @@ function animateCounter(id, newValue) {
         current += step;
         el.innerText = Math.floor(current);
 
-        if (i >= 20) {
-            el.innerText = target;
+        if (i >= 15) {
+            el.innerText = value;
             clearInterval(interval);
         }
-    }, 50);
+    }, 40);
 }
 
-function refreshTicketCount(filmId) {
+function refresh(filmId) {
     fetch("/ticket-count/" + filmId)
-        .then(res => res.json())
-        .then(data => {
+        .then(r => r.json())
+        .then(d => {
             const el = document.getElementById("ticket-count");
             if (!el) return;
 
             const current = parseInt(el.innerText);
-            if (current !== data.count) {
-                animateCounter("ticket-count", data.count);
+            if (current !== d.count) {
+                animateCounter("ticket-count", d.count);
             }
         });
 }
 
 setInterval(() => {
-    if (window.FILM_ID) {
-        refreshTicketCount(window.FILM_ID);
-    }
-}, 3000);
+    if (window.FILM_ID) refresh(window.FILM_ID);
+}, 2500);
 </script>
 """
 
@@ -276,19 +298,14 @@ def films():
         cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (f[0],))
         count = cursor.fetchone()[0]
 
-        button = "<p>❌ SOLD OUT</p>" if count >= MAX_TICKETS else f"<a href='/claim/{f[0]}'>🎟 Claim Ticket</a>"
+        btn = "<p>❌ SOLD OUT</p>" if count >= MAX_TICKETS else f"<a href='/claim/{f[0]}'>🎟 Claim Ticket</a>"
 
         html += f"""
         <div class="card">
             <h2>{f[1]}</h2>
-
-            <p><span id="ticket-count">{count}</span>/{MAX_TICKETS}</p>
-
-            <script>
-                window.FILM_ID = {f[0]};
-            </script>
-
-            {button}
+            <p><span id="ticket-count">{count}</span> / {MAX_TICKETS}</p>
+            <script>window.FILM_ID={f[0]}</script>
+            {btn}
         </div>
         """
 
@@ -302,12 +319,12 @@ def claim(film_id):
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <h2 class="glow">🎟 Claim Ticket</h2>
         <div class="card">
+            <h2 class="glow">🎟 Claim Ticket</h2>
             <form action="/submit/{film_id}" method="POST">
-                <input name="name" required>
-                <input name="email" required>
-                <button type="submit">Get Ticket</button>
+                <input name="name" placeholder="Name" required>
+                <input name="email" placeholder="Email" required>
+                <button>Get Ticket</button>
             </form>
         </div>
     </div>
@@ -319,8 +336,8 @@ def claim(film_id):
 # -------------------------
 @app.route("/submit/<int:film_id>", methods=["POST"])
 def submit(film_id):
-    name = request.form.get("name")
-    email = request.form.get("email")
+    name = request.form["name"]
+    email = request.form["email"]
 
     cursor.execute("INSERT INTO logins (name,email,time) VALUES (%s,%s,%s)",
                    (name, email, int(time.time())))
@@ -333,10 +350,8 @@ def submit(film_id):
         return redirect(f"/watch/{existing[0]}")
 
     cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
-    count = cursor.fetchone()[0]
-
-    if count >= MAX_TICKETS:
-        return "<h2>❌ SOLD OUT</h2>"
+    if cursor.fetchone()[0] >= MAX_TICKETS:
+        return "<h2>Sold Out</h2>"
 
     cursor.execute("""
     INSERT INTO tickets (name,email,film_id,created_at)
@@ -350,36 +365,7 @@ def submit(film_id):
     return redirect(f"/watch/{ticket_id}")
 
 # -------------------------
-# ENTER
-# -------------------------
-@app.route("/enter", methods=["GET", "POST"])
-def enter():
-    if request.method == "POST":
-        email = request.form.get("email")
-
-        cursor.execute("SELECT id FROM tickets WHERE email=%s", (email,))
-        ticket = cursor.fetchone()
-
-        if ticket:
-            return redirect(f"/watch/{ticket[0]}")
-        return "<h2>❌ No ticket found</h2>"
-
-    return f"""
-    <html><head>{BASE_STYLE}</head><body>
-    <div class="container">
-        <h2 class="glow">🎬 Enter Premiere</h2>
-        <div class="card">
-            <form method="POST">
-                <input name="email" required>
-                <button type="submit">Enter</button>
-            </form>
-        </div>
-    </div>
-    </body></html>
-    """
-
-# -------------------------
-# WATCH (POSTGRES FIXED)
+# WATCH (CINEMA EXPERIENCE)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -388,7 +374,7 @@ def watch(ticket_id):
     ticket = cursor.fetchone()
 
     if not ticket:
-        return "<h2>❌ Invalid Ticket</h2>"
+        return "<h2>Invalid Ticket</h2>"
 
     cursor.execute("SELECT * FROM films WHERE id=%s", (ticket[3],))
     film = cursor.fetchone()
@@ -399,21 +385,18 @@ def watch(ticket_id):
     INSERT INTO viewers (ticket_id,last_seen)
     VALUES (%s,%s)
     ON CONFLICT (ticket_id)
-    DO UPDATE SET last_seen = EXCLUDED.last_seen
-    """, (ticket_id, now))
+    DO UPDATE SET last_seen=%s
+    """, (ticket_id, now, now))
 
-    conn.commit()
-
-    cursor.execute("DELETE FROM viewers WHERE last_seen < %s", (now - 60,))
     conn.commit()
 
     return f"""
     <html><head>{BASE_STYLE}</head><body>
     <div class="container">
-        <h2 class="glow">🎬 LIVE PREMIERE</h2>
+        <h2 class="glow">🎬 LIVE CINEMA</h2>
 
-        <div class="cinema-frame">
-            <div class="card video-box">
+        <div class="card cinema-frame">
+            <div class="video-box">
                 <iframe src="{film[2]}" allowfullscreen></iframe>
             </div>
         </div>
@@ -423,7 +406,7 @@ def watch(ticket_id):
     """
 
 # -------------------------
-# ADMIN (FIXED DISPLAY ONLY)
+# ADMIN (FULL DARK DASHBOARD FIXED)
 # -------------------------
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
@@ -434,11 +417,11 @@ def admin():
         return f"""
         <html><head>{BASE_STYLE}</head><body>
         <div class="container">
-            <h2 class="glow">🔐 ADMIN LOGIN</h2>
             <div class="card">
+                <h2 class="glow">Admin Login</h2>
                 <form method="POST">
                     <input name="pass" type="password">
-                    <button type="submit">Unlock</button>
+                    <button>Enter</button>
                 </form>
             </div>
         </div>
@@ -453,25 +436,26 @@ def admin():
     JOIN tickets ON tickets.id = viewers.ticket_id
     WHERE viewers.last_seen > %s
     """, (cutoff,))
-    live_users = cursor.fetchall()
+    live = cursor.fetchall()
 
     cursor.execute("SELECT * FROM logins ORDER BY id DESC")
-    logins = cursor.fetchall()
+    logs = cursor.fetchall()
 
-    html = "<h1 class='glow'>🎟 ADMIN PANEL</h1>"
-    html += f"<h2>🟢 LIVE VIEWERS ({len(live_users)})</h2>"
+    html = "<h1 class='glow'>ADMIN DASHBOARD</h1>"
 
-    for v in live_users:
-        html += f"<div class='card'><p class='live'>{v[0]} ({v[1]})</p></div>"
+    html += f"<h2>LIVE ({len(live)})</h2>"
 
-    html += "<h2>👤 USERS (JOIN HISTORY)</h2>"
+    for v in live:
+        html += f"<div class='card admin-card'><p>{v[0]}</p><p>{v[1]}</p></div>"
 
-    for l in logins:
+    html += "<h2>USERS</h2>"
+
+    for l in logs:
         html += f"""
-        <div class="card">
+        <div class="card admin-card">
             <p>Name: {l[1]}</p>
             <p>Email: {l[2]}</p>
-            <p>Joined: {format_time(l[3])}</p>
+            <p>{format_time(l[3])}</p>
         </div>
         """
 
