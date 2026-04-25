@@ -156,7 +156,6 @@ p  { font-size: 34px; }
     text-shadow: 0 0 25px #d4af37;
 }
 
-/* CINEMA VIDEO FRAME */
 .cinema-frame {
     background: radial-gradient(circle, rgba(212,175,55,0.15), transparent);
     padding: 25px;
@@ -329,7 +328,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (CINEMATIC + TIMER REMOVED)
+# WATCH
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -367,12 +366,12 @@ def watch(ticket_id):
     """
 
 # -------------------------
-# ADMIN
+# ADMIN (FIXED ONLY HERE)
 # -------------------------
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
 
-    pass_input = request.args.get("pass") or request.form.get("pass")
+    pass_input = request.form.get("pass") or request.args.get("pass")
 
     if pass_input != ADMIN_PASSWORD:
         return f"""
@@ -380,7 +379,7 @@ def admin():
         <div class="container">
             <h2 class="glow">🔐 ADMIN LOGIN</h2>
             <div class="card">
-                <form method="GET">
+                <form method="POST">
                     <input name="pass" type="password" placeholder="Enter Password">
                     <button type="submit">Unlock</button>
                 </form>
