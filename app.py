@@ -62,7 +62,6 @@ init_db()
 MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
 
-# WAT (UTC+1 already handled via timestamp logic)
 PREMIERE_TIME = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())
 
 # -------------------------
@@ -82,7 +81,7 @@ with get_conn() as conn:
             ))
 
 # -------------------------
-# STYLE (BIGGER + CINEMATIC FIX)
+# STYLE (CINEMATIC + BIG UI)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -94,9 +93,9 @@ body{
     font-family:Arial;
 }
 
-h1{font-size:120px;}
-h2{font-size:80px;}
-p{font-size:42px;}
+h1{font-size:130px;}
+h2{font-size:85px;}
+p{font-size:45px;}
 
 .container{padding:80px 20px;}
 
@@ -115,8 +114,8 @@ p{font-size:42px;}
 }
 
 a,button{
-    padding:40px;
-    font-size:40px;
+    padding:45px;
+    font-size:42px;
     background:#d4af37;
     color:black;
     border-radius:18px;
@@ -140,13 +139,47 @@ input{
     font-weight:bold;
 }
 
-iframe{
+/* CINEMA MODE */
+.cinema{
+    position:fixed;
+    top:0;
+    left:0;
     width:100%;
-    height:650px;
-    border-radius:20px;
+    height:100%;
+    background:black;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    z-index:9999;
 }
 </style>
 """
+
+# -------------------------
+# LIVE VIEWERS API (REAL TIME)
+# -------------------------
+@app.route("/api/live")
+def live_viewers():
+    now = int(time.time())
+    with get_conn() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT COUNT(*) FROM viewers
+                WHERE last_seen > %s
+            """, (now - 60,))
+            count = cursor.fetchone()[0]
+    return jsonify({"live": count})
+
+# -------------------------
+# TICKET COUNT API
+# -------------------------
+@app.route("/api/tickets/<int:film_id>")
+def ticket_count(film_id):
+    with get_conn() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
+            count = cursor.fetchone()[0]
+    return jsonify({"count": count})
 
 # -------------------------
 # HOME
@@ -154,7 +187,8 @@ iframe{
 @app.route("/")
 def home():
     return f"""
-    <html><head>{BASE_STYLE}</head><body>
+    <html><head>{BASE_STYLE}</head>
+    <body>
     <div class="container">
         <h1 class="glow">🎬 XineRent</h1>
         <div class="card">
@@ -167,7 +201,7 @@ def home():
     """
 
 # -------------------------
-# FILMS (FIXED COUNT + 0 SAFETY)
+# FILMS
 # -------------------------
 @app.route("/films")
 def films():
@@ -179,7 +213,6 @@ def films():
     html = f"<html><head>{BASE_STYLE}</head><body><div class='container'>"
 
     for f in films:
-
         with get_conn() as conn:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (f[0],))
@@ -189,7 +222,11 @@ def films():
 
         html += f"""
         <div class="card">
-            <p class="glow">🏆 Official Selection at Cinebration International Film Festival 2026</p>
+
+            <p class="glow">
+            🏆 Official Selection at Cinebration International Film Festival 2026
+            </p>
+
             <h2>{f[1]}</h2>
 
             <p>{count}/{MAX_TICKETS}</p>
@@ -207,7 +244,8 @@ def films():
 @app.route("/claim/<int:film_id>")
 def claim(film_id):
     return f"""
-    <html><head>{BASE_STYLE}</head><body>
+    <html><head>{BASE_STYLE}</head>
+    <body>
     <div class="container">
         <h2 class="glow">🎟 Claim Ticket</h2>
         <div class="card">
@@ -222,15 +260,12 @@ def claim(film_id):
     """
 
 # -------------------------
-# SUBMIT (SAFE)
+# SUBMIT
 # -------------------------
 @app.route("/submit/<int:film_id>", methods=["POST"])
 def submit(film_id):
     name = request.form.get("name")
     email = request.form.get("email")
-
-    if not name or not email:
-        return "Missing data"
 
     with get_conn() as conn:
         with conn.cursor() as cursor:
@@ -239,13 +274,12 @@ def submit(film_id):
             VALUES(%s,%s,%s,%s)
             RETURNING id
             """, (name, email, film_id, int(time.time())))
-
             ticket_id = cursor.fetchone()[0]
 
     return redirect(f"/watch/{ticket_id}")
 
 # -------------------------
-# ENTER (EMAIL LABEL FIXED)
+# ENTER
 # -------------------------
 @app.route("/enter", methods=["GET","POST"])
 def enter():
@@ -263,12 +297,13 @@ def enter():
         return "<h2>No ticket found</h2>"
 
     return f"""
-    <html><head>{BASE_STYLE}</head><body>
+    <html><head>{BASE_STYLE}</head>
+    <body>
     <div class="container">
         <h2 class="glow">Enter Premiere</h2>
         <div class="card">
             <form method="POST">
-                <input name="email" placeholder="Email (used to access premiere)" required>
+                <input name="email" placeholder="Email" required>
                 <button>Enter</button>
             </form>
         </div>
@@ -277,7 +312,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (FIXED + FULLSCREEN + SAFE TIMER)
+# WATCH (CINEMATIC + FULLSCREEN)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -287,9 +322,8 @@ def watch(ticket_id):
 
             cursor.execute("SELECT * FROM tickets WHERE id=%s", (ticket_id,))
             t = cursor.fetchone()
-
             if not t:
-                return "<h2>Invalid Ticket</h2>"
+                return "Invalid Ticket"
 
             cursor.execute("SELECT * FROM films WHERE id=%s", (t[3],))
             film = cursor.fetchone()
@@ -300,7 +334,8 @@ def watch(ticket_id):
 
     if now < PREMIERE_TIME:
         return f"""
-        <html><head>{BASE_STYLE}</head><body>
+        <html><head>{BASE_STYLE}</head>
+        <body>
         <div class="container">
             <h2 class="glow">🎬 STARTS IN</h2>
             <h1 id="cd"></h1>
@@ -319,7 +354,7 @@ def watch(ticket_id):
             let m=Math.floor((d%3600)/60);
             let s=d%60;
 
-            document.getElementById("cd").innerText =
+            document.getElementById("cd").innerText=
             dd+"d "+h+"h "+m+"m "+s+"s";
         },1000);
         </script>
@@ -327,51 +362,78 @@ def watch(ticket_id):
         """
 
     return f"""
-    <html><head>{BASE_STYLE}</head><body>
+    <html><head>{BASE_STYLE}</head>
+    <body>
     <div class="container">
+
         <h2 class="glow">🎬 LIVE PREMIERE</h2>
+
+        <p class="live">🔴 LIVE VIEWERS: <span id="live">0</span></p>
 
         <div class="card">
             <iframe id="vid" src="{video}" allowfullscreen></iframe>
         </div>
 
-        <p class="live">🔴 LIVE STREAM ACTIVE</p>
     </div>
 
     <script>
+    setInterval(()=>{
+        fetch('/api/live')
+        .then(r=>r.json())
+        .then(d=>{
+            document.getElementById('live').innerText = d.live;
+        });
+    },2000);
+
     window.onload=function(){{
         let v=document.getElementById("vid");
-        setTimeout(()=>{
+        setTimeout(()=>{{
             if(v.requestFullscreen) v.requestFullscreen();
-        },1200);
+        }},1200);
     }}
     </script>
+
     </body></html>
     """
 
 # -------------------------
-# ADMIN (UNCHANGED SAFE)
+# ADMIN (REAL TIME LIVE VIEW)
 # -------------------------
 @app.route("/admin", methods=["GET","POST"])
 def admin():
 
-    if request.method == "POST":
-        if request.form.get("pass") == ADMIN_PASSWORD:
+    if request.method=="POST":
+        if request.form.get("pass")==ADMIN_PASSWORD:
 
-            with get_conn() as conn:
-                with conn.cursor() as cursor:
-                    cursor.execute("SELECT name,email FROM tickets")
-                    users = cursor.fetchall()
+            return f"""
+            <html><head>{BASE_STYLE}</head>
+            <body>
+            <div class="container">
+                <h1 class="glow">ADMIN PANEL</h1>
 
-            html = "<h1 class='glow'>ADMIN PANEL</h1><div class='card'>"
-            for u in users:
-                html += f"<p>{u[0]} | {u[1]}</p>"
-            html += "</div>"
+                <div class="card">
+                    <h2>LIVE VIEWERS</h2>
+                    <p class="live" id="live">0</p>
+                </div>
 
-            return f"<html><head>{BASE_STYLE}</head><body>{html}</body></html>"
+            </div>
+
+            <script>
+            setInterval(()=>{
+                fetch('/api/live')
+                .then(r=>r.json())
+                .then(d=>{
+                    document.getElementById('live').innerText=d.live;
+                });
+            },2000);
+            </script>
+
+            </body></html>
+            """
 
     return f"""
-    <html><head>{BASE_STYLE}</head><body>
+    <html><head>{BASE_STYLE}</head>
+    <body>
     <div class="container">
         <h2 class="glow">ADMIN LOGIN</h2>
         <div class="card">
