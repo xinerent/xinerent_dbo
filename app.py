@@ -6,7 +6,7 @@ import datetime
 import smtplib
 from email.mime.text import MIMEText
 
-app = Flask(__name__)  # FIXED
+app = Flask(__name__)
 
 # -------------------------
 # POSTGRES CONNECTION
@@ -61,9 +61,9 @@ MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
 
 # -------------------------
-# PREMIERE SETUP (FIXED 7PM)
+# PREMIERE SETUP (7PM FIXED)
 # -------------------------
-release_time = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())  # FIXED
+release_time = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())
 
 cursor.execute("SELECT COUNT(*) FROM films")
 if cursor.fetchone()[0] == 0:
@@ -80,13 +80,13 @@ if cursor.fetchone()[0] == 0:
 # -------------------------
 # API: TICKET COUNT
 # -------------------------
-@app.route("/ticket-count/<int:film_id>")  # FIXED
+@app.route("/ticket-count/<int:film_id>")
 def ticket_count(film_id):
     cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
     return jsonify({"count": cursor.fetchone()[0]})
 
 # -------------------------
-# LIVE VIEWERS API
+# LIVE VIEWERS API (ADMIN)
 # -------------------------
 @app.route("/admin-data")
 def admin_data():
@@ -105,58 +105,167 @@ def admin_data():
     })
 
 # -------------------------
-# STYLE + JS
+# STYLE + CINEMA ENGINE
 # -------------------------
 BASE_STYLE = """
+
 <style>
-body { margin:0; font-family: Arial; background:#000; color:white; text-align:center; }
+body {
+    margin:0;
+    font-family: Arial;
+    background: radial-gradient(circle at top,#050505,#000);
+    color:white;
+    text-align:center;
+}
+
 .container { padding: 80px 20px; }
-.card { background:#111; padding:60px; border-radius:20px; margin:30px auto; }
-.timer { font-size:60px; color:#d4af37; }
-input { width:95%; padding:35px; font-size:30px; }
-button { padding:25px; font-size:30px; }
+
+.card {
+    background:#0f0f0f;
+    border-radius:25px;
+    padding:60px;
+    margin:30px auto;
+    max-width:95%;
+    border:1px solid rgba(212,175,55,0.25);
+}
+
+h1 { font-size:110px; }
+h2 { font-size:75px; }
+p  { font-size:40px; }
+
+.glow {
+    color:#d4af37;
+    text-shadow:0 0 25px #d4af37;
+}
+
+iframe, video {
+    width:100%;
+    height:600px;
+    border-radius:20px;
+}
+
+a,button{
+    display:block;
+    margin-top:25px;
+    padding:40px;
+    font-size:40px;
+    background:linear-gradient(135deg,#d4af37,#f5e6c8);
+    color:black;
+    border-radius:20px;
+    font-weight:bold;
+    border:none;
+}
+
+input{
+    width:95%;
+    padding:35px;
+    font-size:38px;
+    border-radius:15px;
+    background:#111;
+    color:white;
+}
+
+.timer {
+    font-size:60px;
+    margin-top:20px;
+    color:#d4af37;
+    text-shadow:0 0 20px #d4af37;
+}
+
+/* CINEMA OVERLAY */
+#cinemaOverlay{
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:black;
+    z-index:9999;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+}
 </style>
 
 <script>
+
+/* COUNTDOWN */
 function startCountdown(endTime){
-    function update(){
-        const now = Math.floor(Date.now() / 1000);
-        const diff = endTime - now;
+function update(){
+    const now = Math.floor(Date.now() / 1000);
+    const diff = endTime - now;
 
-        const timer = document.getElementById("timer");
+    const timer = document.getElementById("timer");
 
-        if(diff <= 0){
-            if(timer) timer.innerHTML = "🎬 LIVE NOW";
-            return;
-        }
-
-        const d = Math.floor(diff / 86400);
-        const h = Math.floor((diff % 86400) / 3600);
-        const m = Math.floor((diff % 3600) / 60);
-        const s = diff % 60;
-
-        if(timer){
-            timer.innerHTML = `${d}d ${h}h ${m}m ${s}s`;
-        }
+    if(diff <= 0){
+        if(timer) timer.innerHTML = "🎬 LIVE NOW";
+        return;
     }
 
-    update();
-    setInterval(update, 1000);
+    const d = Math.floor(diff / 86400);
+    const h = Math.floor((diff % 86400) / 3600);
+    const m = Math.floor((diff % 3600) / 60);
+    const s = diff % 60;
+
+    if(timer){
+        timer.innerHTML = `${d}d ${h}h ${m}m ${s}s`;
+    }
 }
+update();
+setInterval(update, 1000);
+}
+
+/* CINEMA */
+function goCinema(){
+const overlay = document.getElementById("cinemaOverlay");
+if(overlay) overlay.style.display = "flex";
+if(document.documentElement.requestFullscreen){
+    document.documentElement.requestFullscreen();
+}
+}
+
+function exitCinema(){
+const overlay = document.getElementById("cinemaOverlay");
+if(overlay) overlay.style.display = "none";
+if(document.exitFullscreen) document.exitFullscreen();
+}
+
+function togglePlay(){
+const video = document.getElementById("cinemaVideo");
+if(video.paused) video.play();
+else video.pause();
+}
+
+/* ADMIN LIVE */
+function loadLive(){
+fetch("/admin-data")
+.then(r => r.json())
+.then(data => {
+let html = "";
+data.live.forEach(v => {
+html += `<p>${v.name} | ${v.email}</p>`;
+});
+const box = document.getElementById("live-box");
+if(box) box.innerHTML = html;
+});
+}
+setInterval(loadLive, 3000);
+
 </script>
 """
 
 # -------------------------
-# ENTER PAGE (LABEL ADDED)
+# ENTER (EMAIL LABEL ADDED)
 # -------------------------
 @app.route("/enter", methods=["GET","POST"])
 def enter():
 
-    if request.method == "POST":
-        email = request.form["email"]
+    if request.method=="POST":
+        email=request.form["email"]
 
         cursor.execute("SELECT id FROM tickets WHERE email=%s",(email,))
-        t = cursor.fetchone()
+        t=cursor.fetchone()
 
         if t:
             return redirect(f"/watch/{t[0]}")
@@ -167,18 +276,16 @@ def enter():
     <html><head>{BASE_STYLE}</head>
     <body>
     <div class="container">
-        <h2>Enter Premiere</h2>
-
+        <h2 class="glow">Enter Premiere</h2>
         <div class="card">
             <form method="POST">
 
-                <p style="font-size:30px;color:#d4af37;">
-                    Enter your email to access the premiere
+                <p style="color:#d4af37;font-size:30px;">
+                Enter your email to access the premiere
                 </p>
 
-                <input name="email" placeholder="Email address" required>
+                <input name="email" placeholder="Email">
                 <button>Enter</button>
-
             </form>
         </div>
     </div>
@@ -186,9 +293,9 @@ def enter():
     """
 
 # -------------------------
-# WATCH PAGE (LOCK + TIMER)
+# WATCH (LOCK + TIMER FIXED)
 # -------------------------
-@app.route("/watch/<int:ticket_id>")  # FIXED
+@app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
 
     cursor.execute("SELECT * FROM tickets WHERE id=%s",(ticket_id,))
@@ -206,7 +313,6 @@ def watch(ticket_id):
     now = int(time.time())
     release = int(film[3])
 
-    # LOCKED BEFORE RELEASE
     if now < release:
         return f"""
         <html>
@@ -214,11 +320,10 @@ def watch(ticket_id):
         <body onload="startCountdown({release})">
 
         <div class="container">
-            <h2>🔒 PREMIERE LOCKED</h2>
+            <h2 class="glow">🔒 PREMIERE LOCKED</h2>
 
-            <div class="card">
+            <div class="card" id="lock">
                 <p>Welcome {t[1]}</p>
-
                 <div id="timer" class="timer"></div>
             </div>
         </div>
@@ -244,7 +349,7 @@ def watch(ticket_id):
     <body>
 
     <div class="container">
-        <h2>🎬 PREMIERE ROOM</h2>
+        <h2 class="glow">🎬 PREMIERE ROOM</h2>
 
         <div class="card">
             <button onclick="goCinema()">⛶ Enter Cinema Mode</button>
@@ -267,7 +372,55 @@ def watch(ticket_id):
     """
 
 # -------------------------
+# ADMIN
+# -------------------------
+@app.route("/admin", methods=["GET","POST"])
+def admin():
+
+    p = request.form.get("pass") or request.args.get("pass")
+
+    if p != ADMIN_PASSWORD:
+        return f"""
+        <html><head>{BASE_STYLE}</head>
+        <body>
+        <div class="container">
+            <h2 class="glow">ADMIN LOGIN</h2>
+            <div class="card">
+                <form method="POST">
+                    <input name="pass" type="password">
+                    <button>Unlock</button>
+                </form>
+            </div>
+        </div>
+        </body></html>
+        """
+
+    cursor.execute("SELECT * FROM logins ORDER BY id DESC")
+    logs = cursor.fetchall()
+
+    html = "<h1 class='glow'>ADMIN PANEL</h1>"
+
+    html += """
+    <div class="card">
+        <h2 class="glow">LIVE VIEWERS</h2>
+        <div id="live-box">Loading...</div>
+    </div>
+    """
+
+    for x in logs:
+        html += f"<p>{x[1]} | {x[2]}</p>"
+
+    return f"""
+    <html>
+    <head>{BASE_STYLE}</head>
+    <body onload="loadLive()">
+    <div class="container">{html}</div>
+    </body>
+    </html>
+    """
+
+# -------------------------
 # RUN
 # -------------------------
-if __name__ == "__main__":  # FIXED
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT",5000)))
