@@ -62,7 +62,6 @@ ADMIN_PASSWORD = "Muha&123"
 
 # -------------------------
 # PREMIERE SETUP (UTC FIXED)
-# 7PM WAT = 18:00 UTC
 # -------------------------
 release_time = int(datetime.datetime(2026, 5, 1, 18, 0).timestamp())
 
@@ -77,12 +76,6 @@ if cursor.fetchone()[0] == 0:
         release_time
     ))
     conn.commit()
-
-# -------------------------
-# TIME FORMAT
-# -------------------------
-def format_time(ts):
-    return datetime.datetime.fromtimestamp(ts).strftime("%d %b %Y %I:%M %p")
 
 # -------------------------
 # COUNTER API
@@ -112,7 +105,7 @@ def admin_data():
     })
 
 # -------------------------
-# STYLE (ONLY CHANGE IS HERE)
+# STYLE (ONLY TIMER FIX ADDED HERE)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -171,42 +164,12 @@ input{
     color:white;
 }
 
-.live {
-    color:#00ff88;
-    animation: pulse 1s infinite;
-}
-
-@keyframes pulse {
-    0% {opacity:1;}
-    50% {opacity:0.4;}
-    100% {opacity:1;}
-}
-
-.admin-box {
-    background:black;
-    color:white;
-    padding:30px;
-    border-radius:20px;
-    text-align:left;
-}
-
 .timer {
     font-size:50px;
     margin-top:20px;
     color:#d4af37;
     text-shadow:0 0 20px #d4af37;
 }
-
-.fs-btn{
-    margin-top:20px;
-    padding:20px;
-    font-size:30px;
-    background:black;
-    color:#d4af37;
-    border-radius:15px;
-}
-
-/* ✅ FIXED COUNTDOWN */
 </style>
 
 <script>
