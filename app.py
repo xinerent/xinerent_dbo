@@ -347,7 +347,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH
+# WATCH (ONLY FIXED PART)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -363,6 +363,7 @@ def watch(ticket_id):
 
     video = film[2] if film and film[2] else ""
     now=int(time.time())
+    release = int(film[3])
 
     cursor.execute("""
     INSERT INTO viewers(ticket_id,last_seen)
@@ -375,7 +376,7 @@ def watch(ticket_id):
 
     return f"""
     <html><head>{BASE_STYLE}</head>
-    <body onload="startCountdown({int(film[3])})">
+    <body onload="startCountdown({release})">
     <div class="container">
         <h2 class="glow">🎬 PREMIERE ROOM</h2>
 
@@ -387,7 +388,7 @@ def watch(ticket_id):
 
         <div id="player" style="display:none;">
             <iframe id="videoFrame"
-                src="{video}?autoplay=1&controls=1"
+                src="{'' if now < release else video + '?autoplay=1&controls=1'}"
                 allow="autoplay; fullscreen">
             </iframe>
 
