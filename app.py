@@ -97,9 +97,7 @@ def admin_data():
     JOIN tickets ON tickets.id = viewers.ticket_id
     WHERE last_seen > %s
     """, (int(time.time()) - 60,))
-
     live = cursor.fetchall()
-
     return jsonify({
         "live": [{"name": x[0], "email": x[1]} for x in live]
     })
@@ -132,11 +130,6 @@ p  { font-size: 40px; }
     color: #d4af37;
     text-shadow: 0 0 25px #d4af37;
 }
-iframe {
-    width: 100%;
-    height: 600px;
-    border-radius: 20px;
-}
 a, button {
     display: block;
     margin-top: 25px;
@@ -161,6 +154,8 @@ input {
     margin-bottom: 20px;
     box-sizing: border-box;
 }
+
+/* ---- TIMER ---- */
 .timer-wrap {
     display: flex;
     justify-content: center;
@@ -206,9 +201,63 @@ input {
     0%, 100% { opacity: 1; }
     50%       { opacity: 0.35; }
 }
+
+/* ---- CINEMA PLAYER ---- */
+.player-wrap {
+    position: relative;
+    width: 100%;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #000;
+    /* 16:9 ratio */
+    aspect-ratio: 16 / 9;
+}
+.player-wrap iframe {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    border-radius: 0;
+}
+/* Cinema toggle button — sits in the corner of the player */
+.cinema-btn {
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    z-index: 10;
+    display: flex !important;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 28px !important;
+    font-size: 28px !important;
+    background: rgba(0,0,0,0.75) !important;
+    color: #d4af37 !important;
+    border: 2px solid rgba(212,175,55,0.5) !important;
+    border-radius: 14px !important;
+    backdrop-filter: blur(6px);
+    margin-top: 0 !important;
+    width: auto !important;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.cinema-btn:hover {
+    background: rgba(212,175,55,0.2) !important;
+}
+/* Fullscreen: fill the whole screen */
+.player-wrap:-webkit-full-screen { width:100vw; height:100vh; aspect-ratio:unset; border-radius:0; }
+.player-wrap:-moz-full-screen    { width:100vw; height:100vh; aspect-ratio:unset; border-radius:0; }
+.player-wrap:fullscreen          { width:100vw; height:100vh; aspect-ratio:unset; border-radius:0; }
+.player-wrap:fullscreen iframe,
+.player-wrap:-webkit-full-screen iframe,
+.player-wrap:-moz-full-screen iframe {
+    position:absolute; top:0; left:0; width:100%; height:100%;
+}
 </style>
 
 <script>
+/* ---- COUNTDOWN ---- */
 function startCountdown(endTime) {
     function pad(n) { return String(n).padStart(2, '0'); }
     function update() {
@@ -237,6 +286,44 @@ function startCountdown(endTime) {
     update();
 }
 
+/* ---- CINEMATIC MODE ---- */
+function toggleCinema() {
+    var wrap = document.getElementById("player-wrap");
+    var btn  = document.getElementById("cinema-btn");
+    if (!wrap) return;
+
+    var isFs = document.fullscreenElement
+            || document.webkitFullscreenElement
+            || document.mozFullScreenElement;
+
+    if (!isFs) {
+        /* Enter fullscreen on the wrapper div — iframe fills it */
+        if (wrap.requestFullscreen)       wrap.requestFullscreen();
+        else if (wrap.webkitRequestFullscreen) wrap.webkitRequestFullscreen();
+        else if (wrap.mozRequestFullScreen)    wrap.mozRequestFullScreen();
+        if (btn) btn.innerHTML = "⊠ Exit Cinema";
+    } else {
+        if (document.exitFullscreen)            document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        else if (document.mozCancelFullScreen)  document.mozCancelFullScreen();
+        if (btn) btn.innerHTML = "⛶ Cinema Mode";
+    }
+}
+
+/* sync button label when user presses Escape */
+document.addEventListener("fullscreenchange",       syncBtn);
+document.addEventListener("webkitfullscreenchange", syncBtn);
+document.addEventListener("mozfullscreenchange",    syncBtn);
+function syncBtn() {
+    var btn = document.getElementById("cinema-btn");
+    if (!btn) return;
+    var isFs = document.fullscreenElement
+            || document.webkitFullscreenElement
+            || document.mozFullScreenElement;
+    btn.innerHTML = isFs ? "⊠ Exit Cinema" : "⛶ Cinema Mode";
+}
+
+/* ---- ADMIN LIVE ---- */
 function loadLive() {
     fetch("/admin-data")
     .then(function(r) { return r.json(); })
@@ -250,6 +337,21 @@ function loadLive() {
     });
 }
 </script>
+"""
+
+# ---- reusable player HTML ----
+def player_html(video_url):
+    return f"""
+<div class="player-wrap" id="player-wrap">
+    <iframe
+        src="{video_url}?autoplay=1&controls=1"
+        allow="autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture"
+        allowfullscreen>
+    </iframe>
+    <button class="cinema-btn" id="cinema-btn" onclick="toggleCinema()">
+        ⛶ Cinema Mode
+    </button>
+</div>
 """
 
 # -------------------------
@@ -285,7 +387,6 @@ def films():
     for f in all_films:
         cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (f[0],))
         count = cursor.fetchone()[0]
-
         html += f"""
         <div class="card">
             <h2>{f[1]}</h2>
@@ -350,7 +451,6 @@ def submit(film_id):
 
     ticket_id = cursor.fetchone()[0]
     conn.commit()
-
     return redirect(f"/watch/{ticket_id}")
 
 # -------------------------
@@ -419,6 +519,7 @@ def watch(ticket_id):
     """, (ticket_id, now))
     conn.commit()
 
+    # ---- COUNTDOWN PAGE (premiere not started yet) ----
     if now < release:
         return f"""
         <html>
@@ -453,8 +554,10 @@ def watch(ticket_id):
                     </div>
                 </div>
             </div>
+
+            <!-- Hidden until countdown hits zero — no reload needed -->
             <div id="player" style="display:none;" class="card">
-                <iframe src="{video}?autoplay=1&controls=1" allow="autoplay; fullscreen"></iframe>
+                {player_html(video)}
             </div>
             <div id="live-badge" class="live-badge" style="display:none;">🎬 LIVE NOW</div>
         </div>
@@ -462,6 +565,7 @@ def watch(ticket_id):
         </html>
         """
 
+    # ---- LIVE PAGE (premiere already started) ----
     return f"""
     <html>
     <head>{BASE_STYLE}</head>
@@ -471,7 +575,7 @@ def watch(ticket_id):
         <div class="live-badge">🎬 LIVE NOW</div>
         <div class="card">
             <p>Welcome, <span class="glow">{t[1]}</span></p>
-            <iframe src="{video}?autoplay=1&controls=1" allow="autoplay; fullscreen"></iframe>
+            {player_html(video)}
         </div>
     </div>
     </body>
