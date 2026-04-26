@@ -105,7 +105,7 @@ def admin_data():
     })
 
 # -------------------------
-# STYLE (ONLY TIMER FIX ADDED HERE)
+# STYLE (UNCHANGED)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -347,7 +347,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (ONLY FIXED PART)
+# WATCH (SECURE PATCH APPLIED)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -361,9 +361,13 @@ def watch(ticket_id):
     cursor.execute("SELECT * FROM films WHERE id=%s",(t[3],))
     film=cursor.fetchone()
 
-    video = film[2] if film and film[2] else ""
-    now=int(time.time())
+    if not film:
+        return "<h2>Film not found</h2>"
+
+    now = int(time.time())
     release = int(film[3])
+
+    video = film[2] if now >= release else ""
 
     cursor.execute("""
     INSERT INTO viewers(ticket_id,last_seen)
@@ -388,7 +392,7 @@ def watch(ticket_id):
 
         <div id="player" style="display:none;">
             <iframe id="videoFrame"
-                src="{'' if now < release else video + '?autoplay=1&controls=1'}"
+                src="{video}?autoplay=1&controls=1"
                 allow="autoplay; fullscreen">
             </iframe>
 
