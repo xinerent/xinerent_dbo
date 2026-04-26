@@ -112,7 +112,7 @@ def admin_data():
     })
 
 # -------------------------
-# STYLE
+# STYLE (ONLY CHANGE IS HERE)
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -205,10 +205,14 @@ input{
     color:#d4af37;
     border-radius:15px;
 }
+
+/* ✅ FIXED COUNTDOWN */
 </style>
 
 <script>
 function startCountdown(endTime){
+    let countdownInterval;
+
     function update(){
         let now = Math.floor(Date.now()/1000);
         let diff = endTime - now;
@@ -218,7 +222,6 @@ function startCountdown(endTime){
             document.getElementById("timer").innerHTML = "🎬 LIVE NOW";
             document.getElementById("player").style.display = "block";
             document.getElementById("lock").style.display = "none";
-            autoCinema();
             return;
         }
 
@@ -228,11 +231,11 @@ function startCountdown(endTime){
         let s = diff % 60;
 
         document.getElementById("timer").innerHTML =
-            d+"d "+h+"h "+m+"m "+s+"s";
+            d + "d " + h + "h " + m + "m " + s + "s";
     }
 
     update();
-    countdownInterval = setInterval(update,1000);
+    countdownInterval = setInterval(update, 1000);
 }
 </script>
 """
