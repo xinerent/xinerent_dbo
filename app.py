@@ -61,9 +61,9 @@ MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
 
 # -------------------------
-# PREMIERE SETUP
+# PREMIERE SETUP (UPDATED)
 # -------------------------
-release_time = int(datetime.datetime(2026, 4, 24, 19, 0).timestamp())
+release_time = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())
 
 cursor.execute("SELECT COUNT(*) FROM films")
 if cursor.fetchone()[0] == 0:
@@ -93,7 +93,25 @@ def ticket_count(film_id):
     return jsonify({"count": count})
 
 # -------------------------
-# STYLE (BIG UI + FIXED ADMIN VISIBILITY)
+# ADMIN LIVE API
+# -------------------------
+@app.route("/admin-data")
+def admin_data():
+    cursor.execute("""
+    SELECT tickets.name,tickets.email
+    FROM viewers
+    JOIN tickets ON tickets.id=viewers.ticket_id
+    WHERE last_seen > %s
+    """,(int(time.time())-60,))
+
+    live = cursor.fetchall()
+
+    return jsonify({
+        "live":[{"name":x[0],"email":x[1]} for x in live]
+    })
+
+# -------------------------
+# STYLE
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -105,7 +123,6 @@ body {
     text-align:center;
 }
 
-/* BIGGER UI */
 .container { padding: 80px 20px; }
 
 .card {
@@ -117,7 +134,6 @@ body {
     border:1px solid rgba(212,175,55,0.25);
 }
 
-/* TEXT SCALING */
 h1 { font-size:110px; }
 h2 { font-size:75px; }
 p  { font-size:40px; }
@@ -127,14 +143,13 @@ p  { font-size:40px; }
     text-shadow:0 0 25px #d4af37;
 }
 
-/* VIDEO FIX */
 iframe {
     width:100%;
     height:600px;
     border-radius:20px;
 }
 
-/* BUTTONS */
+/* BUTTON FIX */
 a,button{
     display:block;
     margin-top:25px;
@@ -144,9 +159,9 @@ a,button{
     color:black;
     border-radius:20px;
     font-weight:bold;
+    border:none !important;
 }
 
-/* INPUT */
 input{
     width:95%;
     padding:35px;
@@ -156,7 +171,6 @@ input{
     color:white;
 }
 
-/* LIVE ANIMATION */
 .live {
     color:#00ff88;
     animation: pulse 1s infinite;
@@ -168,13 +182,20 @@ input{
     100% {opacity:1;}
 }
 
-/* ADMIN FIX */
 .admin-box {
     background:black;
     color:white;
     padding:30px;
     border-radius:20px;
     text-align:left;
+}
+
+/* TIMER */
+.timer {
+    font-size:50px;
+    margin-top:20px;
+    color:#d4af37;
+    text-shadow:0 0 20px #d4af37;
 }
 </style>
 
@@ -214,6 +235,50 @@ setInterval(()=>{
         window.FILM_IDS.forEach(id=>refresh(id));
     }
 },3000);
+
+/* COUNTDOWN */
+function startCountdown(endTime){
+    function update(){
+        let now = Math.floor(Date.now()/1000);
+        let diff = endTime - now;
+
+        if(diff <= 0){
+            document.getElementById("timer").innerHTML = "🎬 LIVE NOW";
+            return;
+        }
+
+        let d = Math.floor(diff / 86400);
+        let h = Math.floor((diff % 86400) / 3600);
+        let m = Math.floor((diff % 3600) / 60);
+        let s = diff % 60;
+
+        document.getElementById("timer").innerHTML =
+            d+"d "+h+"h "+m+"m "+s+"s";
+    }
+    update();
+    setInterval(update,1000);
+}
+
+/* ADMIN LIVE AUTO */
+function refreshAdmin(){
+    fetch("/admin-data")
+    .then(r=>r.json())
+    .then(data=>{
+        let box = document.getElementById("live-box");
+        if(!box) return;
+
+        box.innerHTML = "";
+
+        data.live.forEach(u=>{
+            let p = document.createElement("p");
+            p.className="live";
+            p.innerText = u.name+" - "+u.email;
+            box.appendChild(p);
+        });
+    });
+}
+
+setInterval(refreshAdmin,3000);
 </script>
 """
 
@@ -237,7 +302,7 @@ def home():
     """
 
 # -------------------------
-# FILMS (FIXED IDS + COUNTER BUG)
+# FILMS
 # -------------------------
 @app.route("/films")
 def films():
@@ -257,11 +322,9 @@ def films():
         html += f"""
         <div class="card">
             <h2>{f[1]}</h2>
-
             <p>
                 <span id="count-{f[0]}">{count}</span> / {MAX_TICKETS}
             </p>
-
             <script>
                 window.FILM_IDS = {film_ids};
             </script>
@@ -353,7 +416,8 @@ def enter():
         <h2 class="glow">Enter Premiere</h2>
         <div class="card">
             <form method="POST">
-                <input name="email">
+                <p>Enter your email to access the premiere</p>
+                <input name="email" placeholder="Enter your email" required>
                 <button>Enter</button>
             </form>
         </div>
@@ -362,7 +426,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (FIXED VIDEO CRASH)
+# WATCH
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -377,7 +441,6 @@ def watch(ticket_id):
     film=cursor.fetchone()
 
     video = film[2] if film and film[2] else ""
-
     now=int(time.time())
 
     cursor.execute("""
@@ -388,6 +451,21 @@ def watch(ticket_id):
     """,(ticket_id,now))
 
     conn.commit()
+
+    if now < film[3]:
+        return f"""
+        <html><head>{BASE_STYLE}</head>
+        <body onload="startCountdown({film[3]})">
+        <div class="container">
+            <h2 class="glow">🎬 PREMIERE LOCKED</h2>
+            <div class="card">
+                <p>Welcome {t[1]}</p>
+                <p>Premiere starts in:</p>
+                <div id="timer" class="timer"></div>
+            </div>
+        </div>
+        </body></html>
+        """
 
     return f"""
     <html><head>{BASE_STYLE}</head>
@@ -402,7 +480,7 @@ def watch(ticket_id):
     """
 
 # -------------------------
-# ADMIN (CLEAN + BLACK WHITE FIX)
+# ADMIN
 # -------------------------
 @app.route("/admin", methods=["GET","POST"])
 def admin():
@@ -425,23 +503,11 @@ def admin():
         </body></html>
         """
 
-    cursor.execute("""
-    SELECT tickets.name,tickets.email
-    FROM viewers
-    JOIN tickets ON tickets.id=viewers.ticket_id
-    WHERE last_seen > %s
-    """,(int(time.time())-60,))
-
-    live=cursor.fetchall()
-
     cursor.execute("SELECT * FROM logins ORDER BY id DESC")
     logs=cursor.fetchall()
 
     html="<h1 class='glow'>ADMIN PANEL</h1>"
-
-    html+="<div class='admin-box'><h2>LIVE VIEWERS</h2>"
-    for l in live:
-        html+=f"<p class='live'>{l[0]} - {l[1]}</p>"
+    html+="<div class='admin-box'><h2>LIVE VIEWERS</h2><div id='live-box'></div>"
 
     html+="<h2>USERS</h2>"
     for x in logs:
