@@ -61,7 +61,7 @@ MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
 
 # -------------------------
-# PREMIERE SETUP (UTC FIXED)
+# PREMIERE SETUP
 # -------------------------
 release_time = int(datetime.datetime(2026, 5, 1, 18, 0).timestamp())
 
@@ -105,7 +105,7 @@ def admin_data():
     })
 
 # -------------------------
-# STYLE (UNCHANGED)
+# STYLE + CINEMA ENGINE JS
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -174,17 +174,21 @@ input{
 
 <script>
 function startCountdown(endTime){
-    let countdownInterval;
 
     function update(){
-        let now = Math.floor(Date.now()/1000);
-        let diff = endTime - now;
+        const now = Math.floor(Date.now() / 1000);
+        const diff = endTime - now;
+
+        const timerEl = document.getElementById("timer");
 
         if(diff <= 0){
-            clearInterval(countdownInterval);
-            document.getElementById("timer").innerHTML = "🎬 LIVE NOW";
-            document.getElementById("player").style.display = "block";
-            document.getElementById("lock").style.display = "none";
+            if(timerEl) timerEl.innerHTML = "🎬 LIVE NOW";
+
+            const lock = document.getElementById("lock");
+            const player = document.getElementById("player");
+
+            if(lock) lock.style.display = "none";
+            if(player) player.style.display = "block";
             return;
         }
 
@@ -193,12 +197,42 @@ function startCountdown(endTime){
         let m = Math.floor((diff % 3600) / 60);
         let s = diff % 60;
 
-        document.getElementById("timer").innerHTML =
-            d + "d " + h + "h " + m + "m " + s + "s";
+        if(timerEl){
+            timerEl.innerHTML = `${d}d ${h}h ${m}m ${s}s`;
+        }
     }
 
     update();
-    countdownInterval = setInterval(update, 1000);
+    setInterval(update, 1000);
+}
+
+/* ---------------- CINEMA MODE ---------------- */
+
+function goCinema(){
+    const overlay = document.getElementById("cinemaOverlay");
+    if(overlay) overlay.style.display = "flex";
+
+    const el = document.documentElement;
+
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    else if (el.msRequestFullscreen) el.msRequestFullscreen();
+}
+
+function exitCinema(){
+    const overlay = document.getElementById("cinemaOverlay");
+    if(overlay) overlay.style.display = "none";
+
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+}
+
+function togglePlay(){
+    const video = document.getElementById("cinemaVideo");
+    if(!video) return;
+
+    if(video.paused) video.play();
+    else video.pause();
 }
 </script>
 """
@@ -232,23 +266,14 @@ def films():
 
     html = f"<html><head>{BASE_STYLE}</head><body><div class='container'>"
 
-    film_ids = []
-
     for f in films:
-        film_ids.append(f[0])
-
         cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (f[0],))
         count = cursor.fetchone()[0]
 
         html += f"""
         <div class="card">
             <h2>{f[1]}</h2>
-            <p>
-                <span id="count-{f[0]}">{count}</span> / {MAX_TICKETS}
-            </p>
-            <script>
-                window.FILM_IDS = {film_ids};
-            </script>
+            <p>{count} / {MAX_TICKETS}</p>
         """
 
         if count >= MAX_TICKETS:
@@ -261,7 +286,7 @@ def films():
     return html + "</div></body></html>"
 
 # -------------------------
-# CLAIM
+# CLAIM / SUBMIT / ENTER
 # -------------------------
 @app.route("/claim/<int:film_id>")
 def claim(film_id):
@@ -281,9 +306,6 @@ def claim(film_id):
     </body></html>
     """
 
-# -------------------------
-# SUBMIT
-# -------------------------
 @app.route("/submit/<int:film_id>", methods=["POST"])
 def submit(film_id):
     name = request.form["name"]
@@ -299,10 +321,6 @@ def submit(film_id):
     if ex:
         return redirect(f"/watch/{ex[0]}")
 
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
-    if cursor.fetchone()[0] >= MAX_TICKETS:
-        return "<h2>Sold Out</h2>"
-
     cursor.execute("""
         INSERT INTO tickets(name,email,film_id,created_at)
         VALUES(%s,%s,%s,%s)
@@ -314,9 +332,6 @@ def submit(film_id):
 
     return redirect(f"/watch/{ticket_id}")
 
-# -------------------------
-# ENTER
-# -------------------------
 @app.route("/enter", methods=["GET","POST"])
 def enter():
     if request.method=="POST":
@@ -337,8 +352,7 @@ def enter():
         <h2 class="glow">Enter Premiere</h2>
         <div class="card">
             <form method="POST">
-                <p>Enter your email to access the premiere</p>
-                <input name="email" placeholder="Enter your email" required>
+                <input name="email">
                 <button>Enter</button>
             </form>
         </div>
@@ -347,7 +361,7 @@ def enter():
     """
 
 # -------------------------
-# WATCH (SECURE PATCH APPLIED)
+# WATCH (CINEMA MODE ENABLED)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -367,7 +381,26 @@ def watch(ticket_id):
     now = int(time.time())
     release = int(film[3])
 
-    video = film[2] if now >= release else ""
+    if now < release:
+        return f"""
+        <html>
+        <head>{BASE_STYLE}</head>
+        <body onload="startCountdown({release})">
+
+        <div class="container">
+            <h2 class="glow">🔒 PREMIERE LOCKED</h2>
+
+            <div class="card" id="lock">
+                <p>Welcome {t[1]}</p>
+                <div id="timer" class="timer"></div>
+            </div>
+        </div>
+
+        </body>
+        </html>
+        """
+
+    video = film[2]
 
     cursor.execute("""
     INSERT INTO viewers(ticket_id,last_seen)
@@ -379,28 +412,35 @@ def watch(ticket_id):
     conn.commit()
 
     return f"""
-    <html><head>{BASE_STYLE}</head>
-    <body onload="startCountdown({release})">
+    <html>
+    <head>{BASE_STYLE}</head>
+    <body>
+
     <div class="container">
         <h2 class="glow">🎬 PREMIERE ROOM</h2>
 
-        <div class="card" id="lock">
-            <p>Welcome {t[1]}</p>
-            <p>Premiere countdown:</p>
-            <div id="timer" class="timer"></div>
+        <div class="card">
+            <button onclick="goCinema()">⛶ Enter Cinema Mode</button>
         </div>
+    </div>
 
-        <div id="player" style="display:none;">
-            <iframe id="videoFrame"
-                src="{video}?autoplay=1&controls=1"
-                allow="autoplay; fullscreen">
-            </iframe>
+    <!-- CINEMA MODE -->
+    <div id="cinemaOverlay"
+         style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:black;z-index:9999;flex-direction:column;justify-content:center;align-items:center;">
 
-            <button class="fs-btn" onclick="goCinema()">⛶ Enter Full Cinema Mode</button>
+        <video id="cinemaVideo" width="100%" height="100%" autoplay controls>
+            <source src="{video}" type="video/mp4">
+        </video>
+
+        <div style="position:absolute;bottom:40px;display:flex;gap:30px;">
+            <button onclick="togglePlay()">⏯ Play/Pause</button>
+            <button onclick="exitCinema()">❌ Exit</button>
         </div>
 
     </div>
-    </body></html>
+
+    </body>
+    </html>
     """
 
 # -------------------------
@@ -408,7 +448,6 @@ def watch(ticket_id):
 # -------------------------
 @app.route("/admin", methods=["GET","POST"])
 def admin():
-
     p=request.form.get("pass") or request.args.get("pass")
 
     if p!=ADMIN_PASSWORD:
@@ -431,13 +470,8 @@ def admin():
     logs=cursor.fetchall()
 
     html="<h1 class='glow'>ADMIN PANEL</h1>"
-    html+="<div class='admin-box'><h2>LIVE VIEWERS</h2><div id='live-box'></div>"
-
-    html+="<h2>USERS</h2>"
     for x in logs:
         html+=f"<p>{x[1]} | {x[2]}</p>"
-
-    html+="</div>"
 
     return f"<html><head>{BASE_STYLE}</head><body><div class='container'>{html}</div></body></html>"
 
