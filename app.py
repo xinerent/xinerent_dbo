@@ -61,7 +61,7 @@ MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
 
 # -------------------------
-# PREMIERE SETUP (7PM FIXED)
+# PREMIERE SETUP (7PM)
 # -------------------------
 release_time = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())
 
@@ -78,182 +78,15 @@ if cursor.fetchone()[0] == 0:
     conn.commit()
 
 # -------------------------
-# API: TICKET COUNT
+# HOME (ADDED)
 # -------------------------
-@app.route("/ticket-count/<int:film_id>")
-def ticket_count(film_id):
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
-    return jsonify({"count": cursor.fetchone()[0]})
-
-# -------------------------
-# LIVE VIEWERS API (ADMIN)
-# -------------------------
-@app.route("/admin-data")
-def admin_data():
-    cursor.execute("""
-    SELECT tickets.name,tickets.email
-    FROM viewers
-    JOIN tickets ON tickets.id=viewers.ticket_id
-    WHERE last_seen > %s
-    """, (int(time.time()) - 60,))
-
-    live = cursor.fetchall()
-
-    return jsonify({
-        "live": [{"name": x[0], "email": x[1]} for x in live],
-        "server_time": int(time.time())
-    })
-
-# -------------------------
-# STYLE + CINEMA ENGINE
-# -------------------------
-BASE_STYLE = """
-
-<style>
-body {
-    margin:0;
-    font-family: Arial;
-    background: radial-gradient(circle at top,#050505,#000);
-    color:white;
-    text-align:center;
-}
-
-.container { padding: 80px 20px; }
-
-.card {
-    background:#0f0f0f;
-    border-radius:25px;
-    padding:60px;
-    margin:30px auto;
-    max-width:95%;
-    border:1px solid rgba(212,175,55,0.25);
-}
-
-h1 { font-size:110px; }
-h2 { font-size:75px; }
-p  { font-size:40px; }
-
-.glow {
-    color:#d4af37;
-    text-shadow:0 0 25px #d4af37;
-}
-
-iframe, video {
-    width:100%;
-    height:600px;
-    border-radius:20px;
-}
-
-a,button{
-    display:block;
-    margin-top:25px;
-    padding:40px;
-    font-size:40px;
-    background:linear-gradient(135deg,#d4af37,#f5e6c8);
-    color:black;
-    border-radius:20px;
-    font-weight:bold;
-    border:none;
-}
-
-input{
-    width:95%;
-    padding:35px;
-    font-size:38px;
-    border-radius:15px;
-    background:#111;
-    color:white;
-}
-
-.timer {
-    font-size:60px;
-    margin-top:20px;
-    color:#d4af37;
-    text-shadow:0 0 20px #d4af37;
-}
-
-/* CINEMA OVERLAY */
-#cinemaOverlay{
-    display:none;
-    position:fixed;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
-    background:black;
-    z-index:9999;
-    justify-content:center;
-    align-items:center;
-    flex-direction:column;
-}
-</style>
-
-<script>
-
-/* COUNTDOWN */
-function startCountdown(endTime){
-function update(){
-    const now = Math.floor(Date.now() / 1000);
-    const diff = endTime - now;
-
-    const timer = document.getElementById("timer");
-
-    if(diff <= 0){
-        if(timer) timer.innerHTML = "🎬 LIVE NOW";
-        return;
-    }
-
-    const d = Math.floor(diff / 86400);
-    const h = Math.floor((diff % 86400) / 3600);
-    const m = Math.floor((diff % 3600) / 60);
-    const s = diff % 60;
-
-    if(timer){
-        timer.innerHTML = `${d}d ${h}h ${m}m ${s}s`;
-    }
-}
-update();
-setInterval(update, 1000);
-}
-
-/* CINEMA */
-function goCinema(){
-const overlay = document.getElementById("cinemaOverlay");
-if(overlay) overlay.style.display = "flex";
-if(document.documentElement.requestFullscreen){
-    document.documentElement.requestFullscreen();
-}
-}
-
-function exitCinema(){
-const overlay = document.getElementById("cinemaOverlay");
-if(overlay) overlay.style.display = "none";
-if(document.exitFullscreen) document.exitFullscreen();
-}
-
-function togglePlay(){
-const video = document.getElementById("cinemaVideo");
-if(video.paused) video.play();
-else video.pause();
-}
-
-/* ADMIN LIVE */
-function loadLive(){
-fetch("/admin-data")
-.then(r => r.json())
-.then(data => {
-let html = "";
-data.live.forEach(v => {
-html += `<p>${v.name} | ${v.email}</p>`;
-});
-const box = document.getElementById("live-box");
-if(box) box.innerHTML = html;
-});
-}
-setInterval(loadLive, 3000);
-
-</script>
-"""
+@app.route("/")
+def home():
+    return """
+    <h1>XineRent Running</h1>
+    <a href="/enter">Enter Premiere</a><br>
+    <a href="/admin">Admin Panel</a>
+    """
 
 # -------------------------
 # ENTER (EMAIL LABEL ADDED)
@@ -273,24 +106,77 @@ def enter():
         return "<h2>No ticket</h2>"
 
     return f"""
-    <html><head>{BASE_STYLE}</head>
+    <html><head></head>
     <body>
-    <div class="container">
-        <h2 class="glow">Enter Premiere</h2>
-        <div class="card">
-            <form method="POST">
+    <h2>Enter Premiere</h2>
 
-                <p style="color:#d4af37;font-size:30px;">
-                Enter your email to access the premiere
-                </p>
+    <form method="POST">
+        <p>Enter your email to access the premiere</p>
+        <input name="email" placeholder="Email" required>
+        <button>Enter</button>
+    </form>
 
-                <input name="email" placeholder="Email">
-                <button>Enter</button>
-            </form>
-        </div>
-    </div>
     </body></html>
     """
+
+# -------------------------
+# API: TICKET COUNT
+# -------------------------
+@app.route("/ticket-count/<int:film_id>")
+def ticket_count(film_id):
+    cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
+    return jsonify({"count": cursor.fetchone()[0]})
+
+# -------------------------
+# ADMIN LIVE API
+# -------------------------
+@app.route("/admin-data")
+def admin_data():
+    cursor.execute("""
+    SELECT tickets.name,tickets.email
+    FROM viewers
+    JOIN tickets ON tickets.id=viewers.ticket_id
+    WHERE last_seen > %s
+    """, (int(time.time()) - 60,))
+
+    live = cursor.fetchall()
+
+    return jsonify({
+        "live": [{"name": x[0], "email": x[1]} for x in live],
+        "server_time": int(time.time())
+    })
+
+# -------------------------
+# STYLE + JS
+# -------------------------
+BASE_STYLE = """
+<script>
+function startCountdown(endTime){
+    function update(){
+        const now = Math.floor(Date.now()/1000);
+        const diff = endTime - now;
+
+        const timer = document.getElementById("timer");
+
+        if(diff <= 0){
+            if(timer) timer.innerHTML = "🎬 LIVE NOW";
+            return;
+        }
+
+        const d = Math.floor(diff/86400);
+        const h = Math.floor((diff%86400)/3600);
+        const m = Math.floor((diff%3600)/60);
+        const s = diff%60;
+
+        if(timer){
+            timer.innerHTML = d+"d "+h+"h "+m+"m "+s+"s";
+        }
+    }
+    update();
+    setInterval(update,1000);
+}
+</script>
+"""
 
 # -------------------------
 # WATCH (LOCK + TIMER FIXED)
@@ -313,25 +199,23 @@ def watch(ticket_id):
     now = int(time.time())
     release = int(film[3])
 
+    # LOCKED
     if now < release:
         return f"""
         <html>
         <head>{BASE_STYLE}</head>
         <body onload="startCountdown({release})">
 
-        <div class="container">
-            <h2 class="glow">🔒 PREMIERE LOCKED</h2>
+        <h2>🔒 PREMIERE LOCKED</h2>
+        <p>Welcome {t[1]}</p>
 
-            <div class="card" id="lock">
-                <p>Welcome {t[1]}</p>
-                <div id="timer" class="timer"></div>
-            </div>
-        </div>
+        <div id="timer" style="font-size:40px;"></div>
 
         </body>
         </html>
         """
 
+    # AFTER RELEASE
     video = film[2]
 
     cursor.execute("""
@@ -345,27 +229,11 @@ def watch(ticket_id):
 
     return f"""
     <html>
-    <head>{BASE_STYLE}</head>
     <body>
 
-    <div class="container">
-        <h2 class="glow">🎬 PREMIERE ROOM</h2>
+    <h2>🎬 PREMIERE ROOM</h2>
 
-        <div class="card">
-            <button onclick="goCinema()">⛶ Enter Cinema Mode</button>
-        </div>
-    </div>
-
-    <div id="cinemaOverlay">
-        <video id="cinemaVideo" controls autoplay>
-            <source src="{video}" type="video/mp4">
-        </video>
-
-        <div style="position:absolute;bottom:40px;display:flex;gap:30px;">
-            <button onclick="togglePlay()">⏯ Play/Pause</button>
-            <button onclick="exitCinema()">❌ Exit</button>
-        </div>
-    </div>
+    <iframe width="100%" height="500" src="{video}?autoplay=1"></iframe>
 
     </body>
     </html>
@@ -380,41 +248,44 @@ def admin():
     p = request.form.get("pass") or request.args.get("pass")
 
     if p != ADMIN_PASSWORD:
-        return f"""
-        <html><head>{BASE_STYLE}</head>
-        <body>
-        <div class="container">
-            <h2 class="glow">ADMIN LOGIN</h2>
-            <div class="card">
-                <form method="POST">
-                    <input name="pass" type="password">
-                    <button>Unlock</button>
-                </form>
-            </div>
-        </div>
-        </body></html>
+        return """
+        <h2>Admin Login</h2>
+        <form method="POST">
+            <input name="pass" type="password">
+            <button>Unlock</button>
+        </form>
         """
 
     cursor.execute("SELECT * FROM logins ORDER BY id DESC")
     logs = cursor.fetchall()
 
-    html = "<h1 class='glow'>ADMIN PANEL</h1>"
+    html = "<h1>ADMIN PANEL</h1>"
 
-    html += """
-    <div class="card">
-        <h2 class="glow">LIVE VIEWERS</h2>
-        <div id="live-box">Loading...</div>
-    </div>
-    """
+    html += "<h2>LIVE VIEWERS</h2><div id='live-box'>Loading...</div>"
 
     for x in logs:
         html += f"<p>{x[1]} | {x[2]}</p>"
 
     return f"""
     <html>
-    <head>{BASE_STYLE}</head>
     <body onload="loadLive()">
-    <div class="container">{html}</div>
+    {html}
+
+    <script>
+    function loadLive(){{
+        fetch("/admin-data")
+        .then(r => r.json())
+        .then(data => {{
+            let html = "";
+            data.live.forEach(v => {{
+                html += `<p>${{v.name}} | ${{v.email}}</p>`;
+            }});
+            document.getElementById("live-box").innerHTML = html;
+        }});
+    }}
+    setInterval(loadLive,3000);
+    </script>
+
     </body>
     </html>
     """
