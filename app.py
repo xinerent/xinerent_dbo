@@ -61,7 +61,7 @@ MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
 
 # -------------------------
-# PREMIERE SETUP (UPDATED)
+# PREMIERE SETUP
 # -------------------------
 release_time = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())
 
@@ -149,7 +149,6 @@ iframe {
     border-radius:20px;
 }
 
-/* BUTTON FIX */
 a,button{
     display:block;
     margin-top:25px;
@@ -197,6 +196,16 @@ input{
     color:#d4af37;
     text-shadow:0 0 20px #d4af37;
 }
+
+/* FULLSCREEN BUTTON */
+.fs-btn{
+    margin-top:20px;
+    padding:20px;
+    font-size:30px;
+    background:black;
+    color:#d4af37;
+    border-radius:15px;
+}
 </style>
 
 <script>
@@ -242,43 +251,31 @@ function startCountdown(endTime){
         let now = Math.floor(Date.now()/1000);
         let diff = endTime - now;
 
-        if(diff <= 0){
-            document.getElementById("timer").innerHTML = "🎬 LIVE NOW";
-            return;
-        }
-
         let d = Math.floor(diff / 86400);
         let h = Math.floor((diff % 86400) / 3600);
         let m = Math.floor((diff % 3600) / 60);
         let s = diff % 60;
 
-        document.getElementById("timer").innerHTML =
-            d+"d "+h+"h "+m+"m "+s+"s";
+        if(diff <= 0){
+            document.getElementById("timer").innerHTML = "🎬 LIVE NOW";
+        } else {
+            document.getElementById("timer").innerHTML =
+                d+"d "+h+"h "+m+"m "+s+"s";
+        }
     }
     update();
     setInterval(update,1000);
 }
 
-/* ADMIN LIVE AUTO */
-function refreshAdmin(){
-    fetch("/admin-data")
-    .then(r=>r.json())
-    .then(data=>{
-        let box = document.getElementById("live-box");
-        if(!box) return;
-
-        box.innerHTML = "";
-
-        data.live.forEach(u=>{
-            let p = document.createElement("p");
-            p.className="live";
-            p.innerText = u.name+" - "+u.email;
-            box.appendChild(p);
-        });
-    });
+/* FULLSCREEN */
+function goFull(){
+    let el=document.documentElement;
+    if(el.requestFullscreen){
+        el.requestFullscreen();
+    }else if(el.webkitRequestFullscreen){
+        el.webkitRequestFullscreen();
+    }
 }
-
-setInterval(refreshAdmin,3000);
 </script>
 """
 
@@ -452,28 +449,19 @@ def watch(ticket_id):
 
     conn.commit()
 
-    if now < film[3]:
-        return f"""
-        <html><head>{BASE_STYLE}</head>
-        <body onload="startCountdown({film[3]})">
-        <div class="container">
-            <h2 class="glow">🎬 PREMIERE LOCKED</h2>
-            <div class="card">
-                <p>Welcome {t[1]}</p>
-                <p>Premiere starts in:</p>
-                <div id="timer" class="timer"></div>
-            </div>
-        </div>
-        </body></html>
-        """
-
     return f"""
     <html><head>{BASE_STYLE}</head>
-    <body>
+    <body onload="startCountdown({film[3]})">
     <div class="container">
-        <h2 class="glow">🎬 LIVE PREMIERE</h2>
+        <h2 class="glow">🎬 PREMIERE ROOM</h2>
         <div class="card">
+            <p>Welcome {t[1]}</p>
+            <p>Premiere countdown:</p>
+            <div id="timer" class="timer"></div>
+
             <iframe src="{video}" allowfullscreen></iframe>
+
+            <button class="fs-btn" onclick="goFull()">⛶ Enter Full Cinema Mode</button>
         </div>
     </div>
     </body></html>
