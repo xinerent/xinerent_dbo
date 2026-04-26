@@ -3,8 +3,6 @@ import psycopg2
 import time
 import os
 import datetime
-import smtplib
-from email.mime.text import MIMEText
 
 app = Flask(__name__)
 
@@ -60,10 +58,8 @@ conn.commit()
 MAX_TICKETS = 700
 ADMIN_PASSWORD = "Muha&123"
 
-# -------------------------
-# PREMIERE SETUP
-# -------------------------
-release_time = int(datetime.datetime(2026, 5, 1, 18, 0).timestamp())
+# FIXED PREMIERE TIME: 1st May 2026, 7:00 PM
+release_time = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())
 
 cursor.execute("SELECT COUNT(*) FROM films")
 if cursor.fetchone()[0] == 0:
@@ -78,34 +74,7 @@ if cursor.fetchone()[0] == 0:
     conn.commit()
 
 # -------------------------
-# COUNTER API
-# -------------------------
-@app.route("/ticket-count/<int:film_id>")
-def ticket_count(film_id):
-    cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
-    count = cursor.fetchone()[0]
-    return jsonify({"count": count})
-
-# -------------------------
-# ADMIN LIVE API
-# -------------------------
-@app.route("/admin-data")
-def admin_data():
-    cursor.execute("""
-    SELECT tickets.name,tickets.email
-    FROM viewers
-    JOIN tickets ON tickets.id=viewers.ticket_id
-    WHERE last_seen > %s
-    """,(int(time.time())-60,))
-
-    live = cursor.fetchall()
-
-    return jsonify({
-        "live":[{"name":x[0],"email":x[1]} for x in live]
-    })
-
-# -------------------------
-# STYLE + CINEMA ENGINE JS
+# STYLE + JS ENGINE
 # -------------------------
 BASE_STYLE = """
 <style>
@@ -137,7 +106,7 @@ p  { font-size:40px; }
     text-shadow:0 0 25px #d4af37;
 }
 
-iframe {
+iframe, video {
     width:100%;
     height:600px;
     border-radius:20px;
@@ -152,7 +121,7 @@ a,button{
     color:black;
     border-radius:20px;
     font-weight:bold;
-    border:none !important;
+    border:none;
 }
 
 input{
@@ -165,24 +134,41 @@ input{
 }
 
 .timer {
-    font-size:50px;
+    font-size:60px;
     margin-top:20px;
     color:#d4af37;
     text-shadow:0 0 20px #d4af37;
 }
+
+/* CINEMA */
+#cinemaOverlay{
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:black;
+    z-index:9999;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+}
 </style>
 
 <script>
+
+/* ---------------- COUNTDOWN ---------------- */
 function startCountdown(endTime){
 
     function update(){
         const now = Math.floor(Date.now() / 1000);
         const diff = endTime - now;
 
-        const timerEl = document.getElementById("timer");
+        const timer = document.getElementById("timer");
 
         if(diff <= 0){
-            if(timerEl) timerEl.innerHTML = "🎬 LIVE NOW";
+            if(timer) timer.innerHTML = "🎬 LIVE NOW";
 
             const lock = document.getElementById("lock");
             const player = document.getElementById("player");
@@ -192,13 +178,13 @@ function startCountdown(endTime){
             return;
         }
 
-        let d = Math.floor(diff / 86400);
-        let h = Math.floor((diff % 86400) / 3600);
-        let m = Math.floor((diff % 3600) / 60);
-        let s = diff % 60;
+        const d = Math.floor(diff / 86400);
+        const h = Math.floor((diff % 86400) / 3600);
+        const m = Math.floor((diff % 3600) / 60);
+        const s = diff % 60;
 
-        if(timerEl){
-            timerEl.innerHTML = `${d}d ${h}h ${m}m ${s}s`;
+        if(timer){
+            timer.innerHTML = `${d}d ${h}h ${m}m ${s}s`;
         }
     }
 
@@ -207,24 +193,18 @@ function startCountdown(endTime){
 }
 
 /* ---------------- CINEMA MODE ---------------- */
-
 function goCinema(){
     const overlay = document.getElementById("cinemaOverlay");
     if(overlay) overlay.style.display = "flex";
 
     const el = document.documentElement;
-
-    if (el.requestFullscreen) el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    else if (el.msRequestFullscreen) el.msRequestFullscreen();
+    if(el.requestFullscreen) el.requestFullscreen();
 }
 
 function exitCinema(){
     const overlay = document.getElementById("cinemaOverlay");
     if(overlay) overlay.style.display = "none";
-
-    if (document.exitFullscreen) document.exitFullscreen();
-    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    if(document.exitFullscreen) document.exitFullscreen();
 }
 
 function togglePlay(){
@@ -234,6 +214,7 @@ function togglePlay(){
     if(video.paused) video.play();
     else video.pause();
 }
+
 </script>
 """
 
@@ -250,7 +231,6 @@ def home():
         <div class="card">
             <a href="/films">🎟 Get Ticket</a>
             <a href="/enter">🎬 Enter Premiere</a>
-            <a href="/admin">🔐 Admin Panel</a>
         </div>
     </div>
     </body></html>
@@ -276,74 +256,31 @@ def films():
             <p>{count} / {MAX_TICKETS}</p>
         """
 
-        if count >= MAX_TICKETS:
-            html += "<p>❌ SOLD OUT</p>"
-        else:
+        if count < MAX_TICKETS:
             html += f"<a href='/claim/{f[0]}'>🎟 Claim Ticket</a>"
+        else:
+            html += "<p>❌ SOLD OUT</p>"
 
         html += "</div>"
 
     return html + "</div></body></html>"
 
 # -------------------------
-# CLAIM / SUBMIT / ENTER
+# ENTER (FIXED LABEL)
 # -------------------------
-@app.route("/claim/<int:film_id>")
-def claim(film_id):
-    return f"""
-    <html><head>{BASE_STYLE}</head>
-    <body>
-    <div class="container">
-        <h2 class="glow">🎟 Claim Ticket</h2>
-        <div class="card">
-            <form action="/submit/{film_id}" method="POST">
-                <input name="name" placeholder="Name" required>
-                <input name="email" placeholder="Email" required>
-                <button>Get Ticket</button>
-            </form>
-        </div>
-    </div>
-    </body></html>
-    """
-
-@app.route("/submit/<int:film_id>", methods=["POST"])
-def submit(film_id):
-    name = request.form["name"]
-    email = request.form["email"]
-
-    cursor.execute("INSERT INTO logins(name,email,time) VALUES(%s,%s,%s)",
-                   (name,email,int(time.time())))
-    conn.commit()
-
-    cursor.execute("SELECT id FROM tickets WHERE email=%s AND film_id=%s", (email,film_id))
-    ex = cursor.fetchone()
-
-    if ex:
-        return redirect(f"/watch/{ex[0]}")
-
-    cursor.execute("""
-        INSERT INTO tickets(name,email,film_id,created_at)
-        VALUES(%s,%s,%s,%s)
-        RETURNING id
-    """, (name,email,film_id,int(time.time())))
-
-    ticket_id = cursor.fetchone()[0]
-    conn.commit()
-
-    return redirect(f"/watch/{ticket_id}")
-
 @app.route("/enter", methods=["GET","POST"])
 def enter():
-    if request.method=="POST":
-        email=request.form["email"]
 
-        cursor.execute("SELECT id FROM tickets WHERE email=%s",(email,))
-        t=cursor.fetchone()
+    if request.method == "POST":
+        email = request.form["email"]
+
+        cursor.execute("SELECT id FROM tickets WHERE email=%s", (email,))
+        t = cursor.fetchone()
 
         if t:
             return redirect(f"/watch/{t[0]}")
 
-        return "<h2>No ticket</h2>"
+        return "<h2>No ticket found</h2>"
 
     return f"""
     <html><head>{BASE_STYLE}</head>
@@ -352,7 +289,8 @@ def enter():
         <h2 class="glow">Enter Premiere</h2>
         <div class="card">
             <form method="POST">
-                <input name="email">
+                <p style="font-size:30px;">Enter your email to access premiere</p>
+                <input name="email" placeholder="Email Address" required>
                 <button>Enter</button>
             </form>
         </div>
@@ -361,19 +299,19 @@ def enter():
     """
 
 # -------------------------
-# WATCH (CINEMA MODE ENABLED)
+# WATCH (FIXED TIMER + GATE)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
 
-    cursor.execute("SELECT * FROM tickets WHERE id=%s",(ticket_id,))
-    t=cursor.fetchone()
+    cursor.execute("SELECT * FROM tickets WHERE id=%s", (ticket_id,))
+    t = cursor.fetchone()
 
     if not t:
         return "<h2>Invalid Ticket</h2>"
 
-    cursor.execute("SELECT * FROM films WHERE id=%s",(t[3],))
-    film=cursor.fetchone()
+    cursor.execute("SELECT * FROM films WHERE id=%s", (t[3],))
+    film = cursor.fetchone()
 
     if not film:
         return "<h2>Film not found</h2>"
@@ -381,6 +319,7 @@ def watch(ticket_id):
     now = int(time.time())
     release = int(film[3])
 
+    # LOCKED
     if now < release:
         return f"""
         <html>
@@ -400,16 +339,8 @@ def watch(ticket_id):
         </html>
         """
 
+    # UNLOCKED
     video = film[2]
-
-    cursor.execute("""
-    INSERT INTO viewers(ticket_id,last_seen)
-    VALUES(%s,%s)
-    ON CONFLICT(ticket_id)
-    DO UPDATE SET last_seen=EXCLUDED.last_seen
-    """,(ticket_id,now))
-
-    conn.commit()
 
     return f"""
     <html>
@@ -424,11 +355,8 @@ def watch(ticket_id):
         </div>
     </div>
 
-    <!-- CINEMA MODE -->
-    <div id="cinemaOverlay"
-         style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:black;z-index:9999;flex-direction:column;justify-content:center;align-items:center;">
-
-        <video id="cinemaVideo" width="100%" height="100%" autoplay controls>
+    <div id="cinemaOverlay">
+        <video id="cinemaVideo" controls autoplay>
             <source src="{video}" type="video/mp4">
         </video>
 
@@ -436,7 +364,6 @@ def watch(ticket_id):
             <button onclick="togglePlay()">⏯ Play/Pause</button>
             <button onclick="exitCinema()">❌ Exit</button>
         </div>
-
     </div>
 
     </body>
@@ -444,39 +371,7 @@ def watch(ticket_id):
     """
 
 # -------------------------
-# ADMIN
-# -------------------------
-@app.route("/admin", methods=["GET","POST"])
-def admin():
-    p=request.form.get("pass") or request.args.get("pass")
-
-    if p!=ADMIN_PASSWORD:
-        return f"""
-        <html><head>{BASE_STYLE}</head>
-        <body>
-        <div class="container">
-            <h2 class="glow">ADMIN LOGIN</h2>
-            <div class="card">
-                <form method="POST">
-                    <input name="pass" type="password">
-                    <button>Unlock</button>
-                </form>
-            </div>
-        </div>
-        </body></html>
-        """
-
-    cursor.execute("SELECT * FROM logins ORDER BY id DESC")
-    logs=cursor.fetchall()
-
-    html="<h1 class='glow'>ADMIN PANEL</h1>"
-    for x in logs:
-        html+=f"<p>{x[1]} | {x[2]}</p>"
-
-    return f"<html><head>{BASE_STYLE}</head><body><div class='container'>{html}</div></body></html>"
-
-# -------------------------
 # RUN
 # -------------------------
-if __name__=="__main__":
+if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT",5000)))
