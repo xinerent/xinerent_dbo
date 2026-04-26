@@ -106,9 +106,7 @@ def admin_data():
 # BASE STYLE + JS
 # -------------------------
 BASE_STYLE = """
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <style>
-* { box-sizing: border-box; }
 body {
     margin: 0;
     font-family: Arial;
@@ -204,125 +202,58 @@ input {
     50%       { opacity: 0.35; }
 }
 
-/* ---- NORMAL PLAYER (portrait, in page) ---- */
+/* ---- CINEMA PLAYER ---- */
 .player-wrap {
     position: relative;
     width: 100%;
-    aspect-ratio: 16 / 9;
-    background: #000;
-    border-radius: 16px;
+    border-radius: 20px;
     overflow: hidden;
+    background: #000;
+    /* 16:9 ratio */
+    aspect-ratio: 16 / 9;
 }
 .player-wrap iframe {
     position: absolute;
     top: 0; left: 0;
-    width: 100%; height: 100%;
+    width: 100%;
+    height: 100%;
     border: none;
+    border-radius: 0;
 }
-
-/* Cinema button — bottom right of player */
+/* Cinema toggle button — sits in the corner of the player */
 .cinema-btn {
-    position: absolute !important;
-    bottom: 12px !important;
-    right: 12px !important;
-    z-index: 20;
-    display: inline-flex !important;
+    position: absolute;
+    bottom: 14px;
+    right: 14px;
+    z-index: 10;
+    display: flex !important;
     align-items: center;
-    gap: 10px;
-    padding: 14px 22px !important;
-    font-size: 26px !important;
-    background: rgba(0,0,0,0.72) !important;
+    gap: 12px;
+    padding: 18px 28px !important;
+    font-size: 28px !important;
+    background: rgba(0,0,0,0.75) !important;
     color: #d4af37 !important;
-    border: 1.5px solid rgba(212,175,55,0.55) !important;
-    border-radius: 12px !important;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    margin: 0 !important;
+    border: 2px solid rgba(212,175,55,0.5) !important;
+    border-radius: 14px !important;
+    backdrop-filter: blur(6px);
+    margin-top: 0 !important;
     width: auto !important;
     font-weight: bold;
     cursor: pointer;
-    transition: background 0.18s;
-    letter-spacing: 1px;
+    transition: background 0.2s;
 }
-.cinema-btn:active {
-    background: rgba(212,175,55,0.22) !important;
+.cinema-btn:hover {
+    background: rgba(212,175,55,0.2) !important;
 }
-
-/* ---- CINEMA OVERLAY (custom fullscreen) ---- */
-#cinema-overlay {
-    display: none;
-    position: fixed;
-    top: 0; left: 0;
-    width: 100vw; height: 100vh;
-    background: #000;
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-    /* cinematic letterbox glow along the edges */
-    box-shadow: inset 0 0 0 3px rgba(212,175,55,0.18),
-                inset 0 0 60px 0 rgba(0,0,0,0.95);
+/* Fullscreen: fill the whole screen */
+.player-wrap:-webkit-full-screen { width:100vw; height:100vh; aspect-ratio:unset; border-radius:0; }
+.player-wrap:-moz-full-screen    { width:100vw; height:100vh; aspect-ratio:unset; border-radius:0; }
+.player-wrap:fullscreen          { width:100vw; height:100vh; aspect-ratio:unset; border-radius:0; }
+.player-wrap:fullscreen iframe,
+.player-wrap:-webkit-full-screen iframe,
+.player-wrap:-moz-full-screen iframe {
+    position:absolute; top:0; left:0; width:100%; height:100%;
 }
-#cinema-overlay.active {
-    display: flex;
-}
-
-/* The iframe inside the overlay always fills full landscape */
-#cinema-overlay iframe {
-    width: 100vw;
-    height: 56.25vw;   /* 16:9 based on width */
-    max-height: 100vh;
-    max-width: 177.78vh; /* 16:9 based on height */
-    border: none;
-    display: block;
-    /* sharp cinema border */
-    box-shadow:
-        0 0 0 2px rgba(212,175,55,0.25),
-        0 0 40px 0 rgba(0,0,0,1);
-}
-
-/* Top & bottom cinematic black bars with gold hairline */
-#cinema-overlay::before,
-#cinema-overlay::after {
-    content: '';
-    position: absolute;
-    left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(90deg,
-        transparent 0%,
-        rgba(212,175,55,0.35) 20%,
-        rgba(212,175,55,0.6) 50%,
-        rgba(212,175,55,0.35) 80%,
-        transparent 100%);
-    z-index: 2;
-    pointer-events: none;
-}
-#cinema-overlay::before { top: 0; }
-#cinema-overlay::after  { bottom: 0; }
-
-/* Floating exit pill — top centre, tiny, fades out */
-#exit-cinema-btn {
-    position: fixed;
-    top: 18px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 10000;
-    display: none;
-    padding: 10px 30px !important;
-    font-size: 22px !important;
-    background: rgba(0,0,0,0.65) !important;
-    color: rgba(212,175,55,0.9) !important;
-    border: 1px solid rgba(212,175,55,0.35) !important;
-    border-radius: 30px !important;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    width: auto !important;
-    margin: 0 !important;
-    cursor: pointer;
-    transition: opacity 0.4s;
-    letter-spacing: 1px;
-}
-#exit-cinema-btn.visible { display: block; }
-#exit-cinema-btn.fade    { opacity: 0; }
 </style>
 
 <script>
@@ -341,104 +272,56 @@ function startCountdown(endTime) {
             if (badge)  badge.style.display  = "block";
             return;
         }
-        var d = Math.floor(diff / 86400);
-        var h = Math.floor((diff % 86400) / 3600);
-        var m = Math.floor((diff % 3600) / 60);
-        var s = diff % 60;
+        var days    = Math.floor(diff / 86400);
+        var hours   = Math.floor((diff % 86400) / 3600);
+        var minutes = Math.floor((diff % 3600) / 60);
+        var seconds = diff % 60;
         var el;
-        el = document.getElementById("t-days");    if (el) el.textContent = pad(d);
-        el = document.getElementById("t-hours");   if (el) el.textContent = pad(h);
-        el = document.getElementById("t-minutes"); if (el) el.textContent = pad(m);
-        el = document.getElementById("t-seconds"); if (el) el.textContent = pad(s);
+        el = document.getElementById("t-days");    if (el) el.textContent = pad(days);
+        el = document.getElementById("t-hours");   if (el) el.textContent = pad(hours);
+        el = document.getElementById("t-minutes"); if (el) el.textContent = pad(minutes);
+        el = document.getElementById("t-seconds"); if (el) el.textContent = pad(seconds);
         setTimeout(update, 1000);
     }
     update();
 }
 
-/* ---- CINEMA MODE ---- */
-var cinemaOpen    = false;
-var fadeTimer     = null;
+/* ---- CINEMATIC MODE ---- */
+function toggleCinema() {
+    var wrap = document.getElementById("player-wrap");
+    var btn  = document.getElementById("cinema-btn");
+    if (!wrap) return;
 
-function openCinema() {
-    var overlay  = document.getElementById("cinema-overlay");
-    var exitBtn  = document.getElementById("exit-cinema-btn");
-    if (!overlay) return;
+    var isFs = document.fullscreenElement
+            || document.webkitFullscreenElement
+            || document.mozFullScreenElement;
 
-    cinemaOpen = true;
-    overlay.classList.add("active");
-    document.body.style.overflow = "hidden";
-
-    /* show exit pill, then fade after 3 s */
-    if (exitBtn) {
-        exitBtn.classList.add("visible");
-        exitBtn.classList.remove("fade");
-        clearTimeout(fadeTimer);
-        fadeTimer = setTimeout(function() {
-            exitBtn.classList.add("fade");
-        }, 3000);
-    }
-
-    /* ask browser to lock to landscape if supported */
-    if (screen.orientation && screen.orientation.lock) {
-        screen.orientation.lock("landscape").catch(function(){});
+    if (!isFs) {
+        /* Enter fullscreen on the wrapper div — iframe fills it */
+        if (wrap.requestFullscreen)       wrap.requestFullscreen();
+        else if (wrap.webkitRequestFullscreen) wrap.webkitRequestFullscreen();
+        else if (wrap.mozRequestFullScreen)    wrap.mozRequestFullScreen();
+        if (btn) btn.innerHTML = "⊠ Exit Cinema";
+    } else {
+        if (document.exitFullscreen)            document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+        else if (document.mozCancelFullScreen)  document.mozCancelFullScreen();
+        if (btn) btn.innerHTML = "⛶ Cinema Mode";
     }
 }
 
-function closeCinema() {
-    var overlay = document.getElementById("cinema-overlay");
-    var exitBtn = document.getElementById("exit-cinema-btn");
-    if (!overlay) return;
-
-    cinemaOpen = false;
-    overlay.classList.remove("active");
-    document.body.style.overflow = "";
-
-    if (exitBtn) {
-        exitBtn.classList.remove("visible");
-        exitBtn.classList.remove("fade");
-        clearTimeout(fadeTimer);
-    }
-
-    /* unlock orientation */
-    if (screen.orientation && screen.orientation.unlock) {
-        screen.orientation.unlock();
-    }
+/* sync button label when user presses Escape */
+document.addEventListener("fullscreenchange",       syncBtn);
+document.addEventListener("webkitfullscreenchange", syncBtn);
+document.addEventListener("mozfullscreenchange",    syncBtn);
+function syncBtn() {
+    var btn = document.getElementById("cinema-btn");
+    if (!btn) return;
+    var isFs = document.fullscreenElement
+            || document.webkitFullscreenElement
+            || document.mozFullScreenElement;
+    btn.innerHTML = isFs ? "⊠ Exit Cinema" : "⛶ Cinema Mode";
 }
-
-/* tap anywhere on overlay to show exit button again */
-document.addEventListener("DOMContentLoaded", function() {
-    var overlay = document.getElementById("cinema-overlay");
-    if (overlay) {
-        overlay.addEventListener("click", function(e) {
-            var exitBtn = document.getElementById("exit-cinema-btn");
-            if (!exitBtn) return;
-            exitBtn.classList.remove("fade");
-            clearTimeout(fadeTimer);
-            fadeTimer = setTimeout(function() {
-                exitBtn.classList.add("fade");
-            }, 3000);
-        });
-    }
-});
-
-/* auto-enter cinema when phone rotates to landscape */
-window.addEventListener("orientationchange", function() {
-    setTimeout(function() {
-        var angle = (screen.orientation && screen.orientation.angle !== undefined)
-                    ? screen.orientation.angle
-                    : window.orientation;
-        /* 90 or -90 = landscape */
-        if ((angle === 90 || angle === -90 || angle === 270) && !cinemaOpen) {
-            /* only auto-open if the player exists and is visible */
-            var pw = document.getElementById("player-wrap");
-            if (pw) openCinema();
-        }
-        /* auto-close when they rotate back to portrait */
-        if ((angle === 0 || angle === 180) && cinemaOpen) {
-            closeCinema();
-        }
-    }, 150);
-});
 
 /* ---- ADMIN LIVE ---- */
 function loadLive() {
@@ -458,29 +341,16 @@ function loadLive() {
 
 # ---- reusable player HTML ----
 def player_html(video_url):
-    # append YouTube params: autoplay, no related videos, modestbranding
-    yt = video_url.rstrip("/") + "?autoplay=1&controls=1&rel=0&modestbranding=1"
     return f"""
-<!-- cinema overlay (covers full screen) -->
-<div id="cinema-overlay">
-    <iframe
-        src="{yt}"
-        allow="autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture"
-        allowfullscreen>
-    </iframe>
-</div>
-
-<!-- floating exit pill (shown inside cinema) -->
-<button id="exit-cinema-btn" onclick="closeCinema()">✕ Exit Cinema</button>
-
-<!-- normal in-page player -->
 <div class="player-wrap" id="player-wrap">
     <iframe
-        src="{yt}"
+        src="{video_url}?autoplay=1&controls=1"
         allow="autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture"
         allowfullscreen>
     </iframe>
-    <button class="cinema-btn" onclick="openCinema()">⛶ Cinema Mode</button>
+    <button class="cinema-btn" id="cinema-btn" onclick="toggleCinema()">
+        ⛶ Cinema Mode
+    </button>
 </div>
 """
 
@@ -649,7 +519,7 @@ def watch(ticket_id):
     """, (ticket_id, now))
     conn.commit()
 
-    # ---- COUNTDOWN PAGE ----
+    # ---- COUNTDOWN PAGE (premiere not started yet) ----
     if now < release:
         return f"""
         <html>
@@ -684,6 +554,8 @@ def watch(ticket_id):
                     </div>
                 </div>
             </div>
+
+            <!-- Hidden until countdown hits zero — no reload needed -->
             <div id="player" style="display:none;" class="card">
                 {player_html(video)}
             </div>
@@ -693,7 +565,7 @@ def watch(ticket_id):
         </html>
         """
 
-    # ---- LIVE PAGE ----
+    # ---- LIVE PAGE (premiere already started) ----
     return f"""
     <html>
     <head>{BASE_STYLE}</head>
