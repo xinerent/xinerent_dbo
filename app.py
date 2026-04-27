@@ -223,18 +223,18 @@ input {
 /* Cinema toggle button — sits in the corner of the player */
 .cinema-btn {
     position: absolute;
-    bottom: 14px;
-    right: 14px;
+    bottom: 10px;
+    right: 10px;
     z-index: 10;
     display: flex !important;
     align-items: center;
-    gap: 12px;
-    padding: 18px 28px !important;
-    font-size: 28px !important;
+    gap: 6px;
+    padding: 8px 14px !important;
+    font-size: 16px !important;
     background: rgba(0,0,0,0.75) !important;
     color: #d4af37 !important;
-    border: 2px solid rgba(212,175,55,0.5) !important;
-    border-radius: 14px !important;
+    border: 1px solid rgba(212,175,55,0.5) !important;
+    border-radius: 8px !important;
     backdrop-filter: blur(6px);
     margin-top: 0 !important;
     width: auto !important;
@@ -270,6 +270,12 @@ function startCountdown(endTime) {
             if (lock)   lock.style.display  = "none";
             if (player) player.style.display = "block";
             if (badge)  badge.style.display  = "block";
+            /* Load the video only now — avoids background preload while hidden */
+            var iframe = document.getElementById("premiere-iframe");
+            var wrap   = document.getElementById("player-wrap");
+            if (iframe && wrap && !iframe.src) {
+                iframe.src = wrap.getAttribute("data-src");
+            }
             return;
         }
         var days    = Math.floor(diff / 86400);
@@ -340,7 +346,21 @@ function loadLive() {
 """
 
 # ---- reusable player HTML ----
-def player_html(video_url):
+# deferred=True → iframe src is blank; JS sets it when the countdown hits zero.
+# deferred=False (default) → iframe loads immediately (live page).
+def player_html(video_url, deferred=False):
+    if deferred:
+        return f"""
+<div class="player-wrap" id="player-wrap" data-src="{video_url}?autoplay=1&controls=1">
+    <iframe id="premiere-iframe"
+        allow="autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture"
+        allowfullscreen>
+    </iframe>
+    <button class="cinema-btn" id="cinema-btn" onclick="toggleCinema()">
+        ⛶ Cinema Mode
+    </button>
+</div>
+"""
     return f"""
 <div class="player-wrap" id="player-wrap">
     <iframe
@@ -557,7 +577,7 @@ def watch(ticket_id):
 
             <!-- Hidden until countdown hits zero — no reload needed -->
             <div id="player" style="display:none;" class="card">
-                {player_html(video)}
+                {player_html(video, deferred=True)}
             </div>
             <div id="live-badge" class="live-badge" style="display:none;">🎬 LIVE NOW</div>
         </div>
