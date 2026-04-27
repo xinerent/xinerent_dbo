@@ -267,14 +267,31 @@ function startCountdown(endTime) {
             var lock   = document.getElementById("lock");
             var player = document.getElementById("player");
             var badge  = document.getElementById("live-badge");
-            if (lock)   lock.style.display  = "none";
-            if (player) player.style.display = "block";
-            if (badge)  badge.style.display  = "block";
-            /* Load the video only now — avoids background preload while hidden */
-            var iframe = document.getElementById("premiere-iframe");
-            var wrap   = document.getElementById("player-wrap");
-            if (iframe && wrap && !iframe.src) {
-                iframe.src = wrap.getAttribute("data-src");
+            if (lock)  lock.style.display  = "none";
+            if (badge) badge.style.display = "block";
+            if (player && !player.querySelector("iframe")) {
+                /* Build the player from scratch — no iframe existed before this moment */
+                var videoUrl = player.getAttribute("data-video");
+                var wrap = document.createElement("div");
+                wrap.className = "player-wrap";
+                wrap.id = "player-wrap";
+
+                var iframe = document.createElement("iframe");
+                iframe.src = videoUrl + "?autoplay=1&controls=1";
+                iframe.allow = "autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture";
+                iframe.allowFullscreen = true;
+
+                var btn = document.createElement("button");
+                btn.className = "cinema-btn";
+                btn.id = "cinema-btn";
+                btn.innerHTML = "\u26F6 Cinema Mode";
+                btn.onclick = toggleCinema;
+
+                wrap.appendChild(iframe);
+                wrap.appendChild(btn);
+                player.innerHTML = "";
+                player.appendChild(wrap);
+                player.style.display = "block";
             }
             return;
         }
@@ -345,22 +362,8 @@ function loadLive() {
 </script>
 """
 
-# ---- reusable player HTML ----
-# deferred=True → iframe src is blank; JS sets it when the countdown hits zero.
-# deferred=False (default) → iframe loads immediately (live page).
-def player_html(video_url, deferred=False):
-    if deferred:
-        return f"""
-<div class="player-wrap" id="player-wrap" data-src="{video_url}?autoplay=1&controls=1">
-    <iframe id="premiere-iframe"
-        allow="autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture"
-        allowfullscreen>
-    </iframe>
-    <button class="cinema-btn" id="cinema-btn" onclick="toggleCinema()">
-        ⛶ Cinema Mode
-    </button>
-</div>
-"""
+# ---- reusable player HTML (live page only) ----
+def player_html(video_url):
     return f"""
 <div class="player-wrap" id="player-wrap">
     <iframe
@@ -369,7 +372,7 @@ def player_html(video_url, deferred=False):
         allowfullscreen>
     </iframe>
     <button class="cinema-btn" id="cinema-btn" onclick="toggleCinema()">
-        ⛶ Cinema Mode
+        &#x26F6; Cinema Mode
     </button>
 </div>
 """
@@ -575,11 +578,9 @@ def watch(ticket_id):
                 </div>
             </div>
 
-            <!-- Hidden until countdown hits zero — no reload needed -->
-            <div id="player" style="display:none;" class="card">
-                {player_html(video, deferred=True)}
-            </div>
-            <div id="live-badge" class="live-badge" style="display:none;">🎬 LIVE NOW</div>
+            <!-- Empty container — JS builds the iframe here only when countdown hits zero -->
+            <div id="player" style="display:none;" class="card" data-video="{video}"></div>
+            <div id="live-badge" class="live-badge" style="display:none;">&#x1F3AC; LIVE NOW</div>
         </div>
         </body>
         </html>
