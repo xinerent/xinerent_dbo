@@ -258,41 +258,14 @@ input {
 
 <script>
 /* ---- COUNTDOWN ---- */
-function startCountdown(endTime) {
+function startCountdown(endTime, ticketId) {
     function pad(n) { return String(n).padStart(2, '0'); }
     function update() {
         var now  = Math.floor(Date.now() / 1000);
         var diff = endTime - now;
         if (diff <= 0) {
-            var lock   = document.getElementById("lock");
-            var player = document.getElementById("player");
-            var badge  = document.getElementById("live-badge");
-            if (lock)  lock.style.display  = "none";
-            if (badge) badge.style.display = "block";
-            if (player && !player.querySelector("iframe")) {
-                /* Build the player from scratch — no iframe existed before this moment */
-                var videoUrl = player.getAttribute("data-video");
-                var wrap = document.createElement("div");
-                wrap.className = "player-wrap";
-                wrap.id = "player-wrap";
-
-                var iframe = document.createElement("iframe");
-                iframe.src = videoUrl + "?autoplay=1&controls=1";
-                iframe.allow = "autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture";
-                iframe.allowFullscreen = true;
-
-                var btn = document.createElement("button");
-                btn.className = "cinema-btn";
-                btn.id = "cinema-btn";
-                btn.innerHTML = "\u26F6 Cinema Mode";
-                btn.onclick = toggleCinema;
-
-                wrap.appendChild(iframe);
-                wrap.appendChild(btn);
-                player.innerHTML = "";
-                player.appendChild(wrap);
-                player.style.display = "block";
-            }
+            /* Premiere has started — go to the watch room */
+            window.location.href = "/watch/" + ticketId;
             return;
         }
         var days    = Math.floor(diff / 86400);
@@ -460,7 +433,7 @@ def submit(film_id):
     cursor.execute("SELECT id FROM tickets WHERE email=%s AND film_id=%s", (email, film_id))
     ex = cursor.fetchone()
     if ex:
-        return redirect(f"/watch/{ex[0]}")
+        return redirect(f"/countdown/{ex[0]}")
 
     cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
     if cursor.fetchone()[0] >= MAX_TICKETS:
@@ -474,7 +447,7 @@ def submit(film_id):
 
     ticket_id = cursor.fetchone()[0]
     conn.commit()
-    return redirect(f"/watch/{ticket_id}")
+    return redirect(f"/countdown/{ticket_id}")
 
 # -------------------------
 # ENTER
@@ -486,7 +459,7 @@ def enter():
         cursor.execute("SELECT id FROM tickets WHERE email=%s", (email,))
         t = cursor.fetchone()
         if t:
-            return redirect(f"/watch/{t[0]}")
+            return redirect(f"/countdown/{t[0]}")
         return f"""
         <html><head>{BASE_STYLE}</head>
         <body><div class="container">
@@ -516,7 +489,73 @@ def enter():
     """
 
 # -------------------------
-# WATCH
+# COUNTDOWN (before premiere)
+# -------------------------
+@app.route("/countdown/<int:ticket_id>")
+def countdown(ticket_id):
+    cursor.execute("SELECT * FROM tickets WHERE id=%s", (ticket_id,))
+    t = cursor.fetchone()
+    if not t:
+        return f"<html><head>{BASE_STYLE}</head><body><div class='container'><h2>❌ Invalid Ticket</h2></div></body></html>"
+
+    cursor.execute("SELECT * FROM films WHERE id=%s", (t[3],))
+    film = cursor.fetchone()
+    if not film:
+        return f"<html><head>{BASE_STYLE}</head><body><div class='container'><h2>❌ Film not found</h2></div></body></html>"
+
+    now     = int(time.time())
+    release = int(film[3])
+
+    # Premiere already started — send straight to the watch room
+    if now >= release:
+        return redirect(f"/watch/{ticket_id}")
+
+    return f"""
+    <html>
+    <head>{BASE_STYLE}</head>
+    <body onload="startCountdown({release}, {ticket_id})">
+    <div class="container">
+        <h2 class="glow">&#x1F3AC; XineRent Premiere</h2>
+        <div class="card" id="lock">
+            <p>Welcome, <span class="glow">{t[1]}</span> &#x1F3AB;</p>
+            <p style="font-size:32px; color:rgba(255,255,255,0.5); margin-top:0;">
+                Your ticket is confirmed. The premiere begins:
+            </p>
+            <p style="font-size:34px; color:#d4af37; margin-top:0;">
+                Friday, May 1st at 7:00 PM
+            </p>
+            <div class="timer-wrap">
+                <div class="timer-block">
+                    <span class="timer-number" id="t-days">--</span>
+                    <span class="timer-label">Days</span>
+                </div>
+                <div class="timer-sep">:</div>
+                <div class="timer-block">
+                    <span class="timer-number" id="t-hours">--</span>
+                    <span class="timer-label">Hours</span>
+                </div>
+                <div class="timer-sep">:</div>
+                <div class="timer-block">
+                    <span class="timer-number" id="t-minutes">--</span>
+                    <span class="timer-label">Minutes</span>
+                </div>
+                <div class="timer-sep">:</div>
+                <div class="timer-block">
+                    <span class="timer-number" id="t-seconds">--</span>
+                    <span class="timer-label">Seconds</span>
+                </div>
+            </div>
+            <p style="font-size:30px; color:rgba(255,255,255,0.35); margin-top:40px;">
+                Keep this page open — the film will start automatically.
+            </p>
+        </div>
+    </div>
+    </body>
+    </html>
+    """
+
+# -------------------------
+# WATCH (premiere room — only accessible after release)
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -534,6 +573,10 @@ def watch(ticket_id):
     release = int(film[3])
     video   = film[2]
 
+    # Too early — send back to the countdown page
+    if now < release:
+        return redirect(f"/countdown/{ticket_id}")
+
     cursor.execute("""
     INSERT INTO viewers(ticket_id, last_seen)
     VALUES(%s, %s)
@@ -542,58 +585,13 @@ def watch(ticket_id):
     """, (ticket_id, now))
     conn.commit()
 
-    # ---- COUNTDOWN PAGE (premiere not started yet) ----
-    if now < release:
-        return f"""
-        <html>
-        <head>{BASE_STYLE}</head>
-        <body onload="startCountdown({release})">
-        <div class="container">
-            <h2 class="glow">🔒 PREMIERE LOCKED</h2>
-            <div class="card" id="lock">
-                <p>Welcome, <span class="glow">{t[1]}</span></p>
-                <p style="font-size:32px; color:rgba(255,255,255,0.5); margin-top:0;">
-                    Premieres Friday, May 1st at 7:00 PM
-                </p>
-                <div class="timer-wrap">
-                    <div class="timer-block">
-                        <span class="timer-number" id="t-days">--</span>
-                        <span class="timer-label">Days</span>
-                    </div>
-                    <div class="timer-sep">:</div>
-                    <div class="timer-block">
-                        <span class="timer-number" id="t-hours">--</span>
-                        <span class="timer-label">Hours</span>
-                    </div>
-                    <div class="timer-sep">:</div>
-                    <div class="timer-block">
-                        <span class="timer-number" id="t-minutes">--</span>
-                        <span class="timer-label">Minutes</span>
-                    </div>
-                    <div class="timer-sep">:</div>
-                    <div class="timer-block">
-                        <span class="timer-number" id="t-seconds">--</span>
-                        <span class="timer-label">Seconds</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Empty container — JS builds the iframe here only when countdown hits zero -->
-            <div id="player" style="display:none;" class="card" data-video="{video}"></div>
-            <div id="live-badge" class="live-badge" style="display:none;">&#x1F3AC; LIVE NOW</div>
-        </div>
-        </body>
-        </html>
-        """
-
-    # ---- LIVE PAGE (premiere already started) ----
     return f"""
     <html>
     <head>{BASE_STYLE}</head>
     <body>
     <div class="container">
-        <h2 class="glow">🎬 PREMIERE ROOM</h2>
-        <div class="live-badge">🎬 LIVE NOW</div>
+        <h2 class="glow">&#x1F3AC; PREMIERE ROOM</h2>
+        <div class="live-badge">&#x1F534; LIVE NOW</div>
         <div class="card">
             <p>Welcome, <span class="glow">{t[1]}</span></p>
             {player_html(video)}
