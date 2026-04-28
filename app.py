@@ -63,7 +63,9 @@ ADMIN_PASSWORD = "Muha&123"
 # -------------------------
 # PREMIERE SETUP — Friday May 1st 2026 at 19:00 (7 PM)
 # -------------------------
-release_time = int(datetime.datetime(2026, 5, 1, 19, 0).timestamp())
+# May 1 2026 19:00 WAT (West Africa Time = UTC+1) → 18:00 UTC
+WAT = datetime.timezone(datetime.timedelta(hours=1))
+release_time = int(datetime.datetime(2026, 5, 1, 19, 0, 0, tzinfo=WAT).timestamp())
 
 cursor.execute("SELECT COUNT(*) FROM films")
 if cursor.fetchone()[0] == 0:
@@ -888,16 +890,15 @@ def countdown(ticket_id):
     if not film:
         return redirect("/enter")
 
-    now     = int(time.time())
-    release = int(film[3])
+    now = int(time.time())
 
     # Already past premiere — go straight to watch
-    if now >= release:
+    if now >= release_time:
         return redirect(f"/watch/{ticket_id}")
 
     # Inject guest name, release timestamp, and watch URL into the page
     page = COUNTDOWN_PAGE
-    page = page.replace("RELEASE_TIME", str(release))
+    page = page.replace("RELEASE_TIME", str(release_time))
     page = page.replace("WATCH_URL", f"'/watch/{ticket_id}'")
     page = page.replace(">Guest<", f">{t[1]}<")
     return page
@@ -918,9 +919,8 @@ def watch(ticket_id):
     if not film:
         return f"<html><head>{BASE_STYLE}</head><body><div class='container'><h2>❌ Film not found</h2></div></body></html>"
 
-    now     = int(time.time())
-    release = int(film[3])
-    video   = film[2]
+    now   = int(time.time())
+    video = film[2]
 
     cursor.execute("""
     INSERT INTO viewers(ticket_id, last_seen)
@@ -930,8 +930,8 @@ def watch(ticket_id):
     """, (ticket_id, now))
     conn.commit()
 
-    # ---- Not yet — send to countdown page ----
-    if now < release:
+    # ---- Gate: always use the hardcoded WAT release_time, never the DB value ----
+    if now < release_time:
         return redirect(f"/countdown/{ticket_id}")
 
     # ---- LIVE PAGE (premiere already started) ----
