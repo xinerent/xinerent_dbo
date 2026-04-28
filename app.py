@@ -258,14 +258,41 @@ input {
 
 <script>
 /* ---- COUNTDOWN ---- */
-function startCountdown(endTime, ticketId) {
+function startCountdown(endTime) {
     function pad(n) { return String(n).padStart(2, '0'); }
     function update() {
         var now  = Math.floor(Date.now() / 1000);
         var diff = endTime - now;
         if (diff <= 0) {
-            /* Premiere has started — go to the watch room */
-            window.location.href = "/watch/" + ticketId;
+            var lock   = document.getElementById("lock");
+            var player = document.getElementById("player");
+            var badge  = document.getElementById("live-badge");
+            if (lock)  lock.style.display  = "none";
+            if (badge) badge.style.display = "block";
+            if (player && !player.querySelector("iframe")) {
+                /* Build the player from scratch — no iframe existed before this moment */
+                var videoUrl = player.getAttribute("data-video");
+                var wrap = document.createElement("div");
+                wrap.className = "player-wrap";
+                wrap.id = "player-wrap";
+
+                var iframe = document.createElement("iframe");
+                iframe.src = videoUrl + "?autoplay=1&controls=1";
+                iframe.allow = "autoplay; fullscreen; accelerometer; gyroscope; picture-in-picture";
+                iframe.allowFullscreen = true;
+
+                var btn = document.createElement("button");
+                btn.className = "cinema-btn";
+                btn.id = "cinema-btn";
+                btn.innerHTML = "\u26F6 Cinema Mode";
+                btn.onclick = toggleCinema;
+
+                wrap.appendChild(iframe);
+                wrap.appendChild(btn);
+                player.innerHTML = "";
+                player.appendChild(wrap);
+                player.style.display = "block";
+            }
             return;
         }
         var days    = Math.floor(diff / 86400);
@@ -433,7 +460,7 @@ def submit(film_id):
     cursor.execute("SELECT id FROM tickets WHERE email=%s AND film_id=%s", (email, film_id))
     ex = cursor.fetchone()
     if ex:
-        return redirect(f"/countdown/{ex[0]}")
+        return redirect(f"/watch/{ex[0]}")
 
     cursor.execute("SELECT COUNT(*) FROM tickets WHERE film_id=%s", (film_id,))
     if cursor.fetchone()[0] >= MAX_TICKETS:
@@ -447,7 +474,7 @@ def submit(film_id):
 
     ticket_id = cursor.fetchone()[0]
     conn.commit()
-    return redirect(f"/countdown/{ticket_id}")
+    return redirect(f"/watch/{ticket_id}")
 
 # -------------------------
 # ENTER
@@ -459,7 +486,7 @@ def enter():
         cursor.execute("SELECT id FROM tickets WHERE email=%s", (email,))
         t = cursor.fetchone()
         if t:
-            return redirect(f"/countdown/{t[0]}")
+            return redirect(f"/watch/{t[0]}")
         return f"""
         <html><head>{BASE_STYLE}</head>
         <body><div class="container">
@@ -489,73 +516,395 @@ def enter():
     """
 
 # -------------------------
-# COUNTDOWN (before premiere)
+# COUNTDOWN PAGE
 # -------------------------
+COUNTDOWN_PAGE = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XineRent — Premiere Countdown</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Georgia', serif;
+    background: #000;
+    color: #fff;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  /* --- STARFIELD --- */
+  .stars {
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 30%, rgba(212,175,55,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 70%, rgba(212,175,55,0.03) 0%, transparent 60%),
+      radial-gradient(circle at top, #0a0800, #000 70%);
+    z-index: 0;
+    pointer-events: none;
+  }
+  .star {
+    position: absolute;
+    border-radius: 50%;
+    background: #fff;
+    animation: twinkle var(--d, 3s) ease-in-out infinite var(--delay, 0s);
+    opacity: 0;
+  }
+  @keyframes twinkle {
+    0%, 100% { opacity: 0; }
+    50%       { opacity: var(--max-op, 0.7); }
+  }
+
+  /* --- GOLDEN FILM STRIP TOP --- */
+  .film-strip {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 6px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(212,175,55,0.2) 10%,
+      #d4af37 30%,
+      #f5e6c8 50%,
+      #d4af37 70%,
+      rgba(212,175,55,0.2) 90%,
+      transparent 100%);
+    animation: shimmer 4s ease-in-out infinite;
+    z-index: 10;
+  }
+  .film-strip-bottom {
+    top: auto;
+    bottom: 0;
+  }
+  @keyframes shimmer {
+    0%, 100% { opacity: 0.5; }
+    50%       { opacity: 1; }
+  }
+
+  /* --- MAIN CONTENT --- */
+  .wrap {
+    position: relative;
+    z-index: 5;
+    text-align: center;
+    padding: 20px;
+    width: 100%;
+    max-width: 1100px;
+  }
+
+  .brand {
+    font-size: clamp(32px, 6vw, 64px);
+    letter-spacing: 10px;
+    color: #d4af37;
+    text-shadow: 0 0 40px rgba(212,175,55,0.6), 0 0 80px rgba(212,175,55,0.2);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    font-weight: normal;
+  }
+
+  .tagline {
+    font-size: clamp(12px, 2vw, 18px);
+    letter-spacing: 6px;
+    color: rgba(255,255,255,0.35);
+    text-transform: uppercase;
+    margin-bottom: clamp(30px, 5vh, 60px);
+  }
+
+  /* --- DIVIDER --- */
+  .divider {
+    width: 200px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #d4af37, transparent);
+    margin: 0 auto clamp(20px, 4vh, 50px);
+    opacity: 0.6;
+  }
+
+  .premiere-label {
+    font-size: clamp(13px, 2vw, 20px);
+    letter-spacing: 5px;
+    color: rgba(255,255,255,0.45);
+    text-transform: uppercase;
+    margin-bottom: clamp(20px, 4vh, 45px);
+  }
+  .premiere-label span {
+    color: rgba(212,175,55,0.8);
+  }
+
+  /* --- TIMER --- */
+  .timer {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: clamp(10px, 3vw, 40px);
+    margin-bottom: clamp(20px, 5vh, 60px);
+  }
+
+  .unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: clamp(60px, 12vw, 160px);
+  }
+
+  .number {
+    font-size: clamp(50px, 12vw, 130px);
+    font-weight: bold;
+    font-family: 'Georgia', serif;
+    color: #d4af37;
+    text-shadow:
+      0 0 20px rgba(212,175,55,0.8),
+      0 0 50px rgba(212,175,55,0.4),
+      0 0 100px rgba(212,175,55,0.15);
+    line-height: 1;
+    transition: color 0.15s;
+    /* prevent layout shift when number changes */
+    min-width: clamp(60px, 12vw, 160px);
+    display: block;
+  }
+
+  .number.tick {
+    color: #fff;
+    text-shadow:
+      0 0 20px rgba(255,255,255,0.9),
+      0 0 50px rgba(212,175,55,0.5);
+  }
+
+  .label {
+    font-size: clamp(9px, 1.5vw, 16px);
+    letter-spacing: 5px;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+    margin-top: 10px;
+  }
+
+  .sep {
+    font-size: clamp(40px, 10vw, 110px);
+    color: rgba(212,175,55,0.3);
+    line-height: 1;
+    margin-top: clamp(5px, 1vw, 8px);
+    animation: blink 1s step-start infinite;
+    user-select: none;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 0.3; }
+    50%       { opacity: 0.07; }
+  }
+
+  /* --- WELCOME --- */
+  .welcome {
+    font-size: clamp(14px, 2.5vw, 22px);
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: clamp(30px, 5vh, 60px);
+  }
+  .welcome strong {
+    color: #d4af37;
+    text-shadow: 0 0 15px rgba(212,175,55,0.5);
+    font-style: normal;
+    font-weight: normal;
+  }
+
+  /* --- CURTAIN REVEAL (when timer ends) --- */
+  .curtain {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 1.5s ease;
+  }
+  .curtain.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+  .curtain-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+  .curtain-text p {
+    font-size: clamp(20px, 5vw, 48px);
+    letter-spacing: 8px;
+    color: #d4af37;
+    text-shadow: 0 0 40px #d4af37;
+    text-transform: uppercase;
+    animation: fadeWords 0.8s ease forwards;
+    font-size: 40px;
+  }
+  @keyframes fadeWords {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="stars" id="stars"></div>
+<div class="film-strip"></div>
+<div class="film-strip film-strip-bottom"></div>
+<div class="curtain" id="curtain">
+  <div class="curtain-text">
+    <p>🎬 &nbsp; IT BEGINS</p>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="brand">XineRent</div>
+  <div class="tagline">Exclusive Premiere Event</div>
+  <div class="divider"></div>
+
+  <div class="welcome">
+    Your seat is reserved, <strong id="guest-name">Guest</strong>
+  </div>
+
+  <div class="premiere-label">
+    Premieres &nbsp;<span>Friday, May 1st &nbsp;·&nbsp; 7:00 PM</span>
+  </div>
+
+  <div class="timer">
+    <div class="unit">
+      <span class="number" id="t-days">--</span>
+      <span class="label">Days</span>
+    </div>
+    <div class="sep">:</div>
+    <div class="unit">
+      <span class="number" id="t-hours">--</span>
+      <span class="label">Hours</span>
+    </div>
+    <div class="sep">:</div>
+    <div class="unit">
+      <span class="number" id="t-minutes">--</span>
+      <span class="label">Minutes</span>
+    </div>
+    <div class="sep">:</div>
+    <div class="unit">
+      <span class="number" id="t-seconds">--</span>
+      <span class="label">Seconds</span>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+  <div class="tagline" style="margin-top:20px; margin-bottom:0;">The curtain rises soon</div>
+</div>
+
+<script>
+(function() {
+  /* -- STARFIELD -- */
+  var starsEl = document.getElementById('stars');
+  for (var i = 0; i < 120; i++) {
+    var s = document.createElement('div');
+    s.className = 'star';
+    var size = Math.random() * 2.5 + 0.5;
+    s.style.cssText = [
+      'width:'  + size + 'px',
+      'height:' + size + 'px',
+      'top:'    + Math.random() * 100 + '%',
+      'left:'   + Math.random() * 100 + '%',
+      '--d:'    + (2 + Math.random() * 5) + 's',
+      '--delay:'+ (Math.random() * 6)     + 's',
+      '--max-op:'+ (0.2 + Math.random() * 0.7)
+    ].join(';');
+    starsEl.appendChild(s);
+  }
+
+  /* -- TIMER -- */
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function flashTick(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.add('tick');
+    setTimeout(function() { el.classList.remove('tick'); }, 150);
+  }
+
+  var prevSec = -1;
+
+  function tick() {
+    var now  = Math.floor(Date.now() / 1000);
+    var diff = RELEASE_TIME - now;
+
+    if (diff <= 0) {
+      /* Timer done — fade to black then redirect */
+      ['t-days','t-hours','t-minutes','t-seconds'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.textContent = '00';
+      });
+      setTimeout(function() {
+        document.getElementById('curtain').classList.add('active');
+        setTimeout(function() {
+          window.location.href = WATCH_URL;
+        }, 1800);
+      }, 400);
+      return;
+    }
+
+    var days    = Math.floor(diff / 86400);
+    var hours   = Math.floor((diff % 86400) / 3600);
+    var minutes = Math.floor((diff % 3600) / 60);
+    var seconds = diff % 60;
+
+    document.getElementById('t-days').textContent    = pad(days);
+    document.getElementById('t-hours').textContent   = pad(hours);
+    document.getElementById('t-minutes').textContent = pad(minutes);
+    document.getElementById('t-seconds').textContent = pad(seconds);
+
+    /* Flash seconds digit on every change */
+    if (seconds !== prevSec) {
+      flashTick('t-seconds');
+      if (seconds === 59) flashTick('t-minutes');
+      prevSec = seconds;
+    }
+
+    setTimeout(tick, 1000);
+  }
+
+  tick();
+})();
+</script>
+</body>
+</html>
+"""
+
 @app.route("/countdown/<int:ticket_id>")
 def countdown(ticket_id):
     cursor.execute("SELECT * FROM tickets WHERE id=%s", (ticket_id,))
     t = cursor.fetchone()
     if not t:
-        return f"<html><head>{BASE_STYLE}</head><body><div class='container'><h2>❌ Invalid Ticket</h2></div></body></html>"
+        return redirect("/enter")
 
     cursor.execute("SELECT * FROM films WHERE id=%s", (t[3],))
     film = cursor.fetchone()
     if not film:
-        return f"<html><head>{BASE_STYLE}</head><body><div class='container'><h2>❌ Film not found</h2></div></body></html>"
+        return redirect("/enter")
 
     now     = int(time.time())
     release = int(film[3])
 
-    # Premiere already started — send straight to the watch room
+    # Already past premiere — go straight to watch
     if now >= release:
         return redirect(f"/watch/{ticket_id}")
 
-    return f"""
-    <html>
-    <head>{BASE_STYLE}</head>
-    <body onload="startCountdown({release}, {ticket_id})">
-    <div class="container">
-        <h2 class="glow">&#x1F3AC; XineRent Premiere</h2>
-        <div class="card" id="lock">
-            <p>Welcome, <span class="glow">{t[1]}</span> &#x1F3AB;</p>
-            <p style="font-size:32px; color:rgba(255,255,255,0.5); margin-top:0;">
-                Your ticket is confirmed. The premiere begins:
-            </p>
-            <p style="font-size:34px; color:#d4af37; margin-top:0;">
-                Friday, May 1st at 7:00 PM
-            </p>
-            <div class="timer-wrap">
-                <div class="timer-block">
-                    <span class="timer-number" id="t-days">--</span>
-                    <span class="timer-label">Days</span>
-                </div>
-                <div class="timer-sep">:</div>
-                <div class="timer-block">
-                    <span class="timer-number" id="t-hours">--</span>
-                    <span class="timer-label">Hours</span>
-                </div>
-                <div class="timer-sep">:</div>
-                <div class="timer-block">
-                    <span class="timer-number" id="t-minutes">--</span>
-                    <span class="timer-label">Minutes</span>
-                </div>
-                <div class="timer-sep">:</div>
-                <div class="timer-block">
-                    <span class="timer-number" id="t-seconds">--</span>
-                    <span class="timer-label">Seconds</span>
-                </div>
-            </div>
-            <p style="font-size:30px; color:rgba(255,255,255,0.35); margin-top:40px;">
-                Keep this page open — the film will start automatically.
-            </p>
-        </div>
-    </div>
-    </body>
-    </html>
-    """
+    # Inject guest name, release timestamp, and watch URL into the page
+    page = COUNTDOWN_PAGE
+    page = page.replace("RELEASE_TIME", str(release))
+    page = page.replace("WATCH_URL", f"'/watch/{ticket_id}'")
+    page = page.replace(">Guest<", f">{t[1]}<")
+    return page
+
 
 # -------------------------
-# WATCH (premiere room — only accessible after release)
+# WATCH
 # -------------------------
 @app.route("/watch/<int:ticket_id>")
 def watch(ticket_id):
@@ -573,10 +922,6 @@ def watch(ticket_id):
     release = int(film[3])
     video   = film[2]
 
-    # Too early — send back to the countdown page
-    if now < release:
-        return redirect(f"/countdown/{ticket_id}")
-
     cursor.execute("""
     INSERT INTO viewers(ticket_id, last_seen)
     VALUES(%s, %s)
@@ -585,13 +930,18 @@ def watch(ticket_id):
     """, (ticket_id, now))
     conn.commit()
 
+    # ---- Not yet — send to countdown page ----
+    if now < release:
+        return redirect(f"/countdown/{ticket_id}")
+
+    # ---- LIVE PAGE (premiere already started) ----
     return f"""
     <html>
     <head>{BASE_STYLE}</head>
     <body>
     <div class="container">
-        <h2 class="glow">&#x1F3AC; PREMIERE ROOM</h2>
-        <div class="live-badge">&#x1F534; LIVE NOW</div>
+        <h2 class="glow">🎬 PREMIERE ROOM</h2>
+        <div class="live-badge">🎬 LIVE NOW</div>
         <div class="card">
             <p>Welcome, <span class="glow">{t[1]}</span></p>
             {player_html(video)}
